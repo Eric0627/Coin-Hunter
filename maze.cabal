@@ -1,0 +1,80 @@
+cabal-version:      2.4
+name:               maze
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+author:             Ben Selfridge
+maintainer:         benselfridge@galois.com
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+library
+    exposed-modules:  Maze
+                      Maze.Algorithms
+                      Maze.Algorithms.BinaryTree
+                      Maze.Algorithms.Kruskal
+                      Maze.Algorithms.RecursiveBacktracking
+                      Maze.Algorithms.Prim
+                      Maze.Core
+                      Maze.Utils
+
+    -- Modules included in this library but not exported.
+    -- other-modules:    Maze.Algorithms.BinaryTree
+    --                   Maze.Algorithms.Kruskal
+    --                   Maze.Algorithms.RecursiveBacktracking
+
+    -- LANGUAGE extensions used by modules in this package.
+    -- other-extensions:
+    build-depends:    base >=4.14,
+                      array,
+                      brick >= 0.61 && < 1,
+                      microlens-platform,
+                      text,
+                      combinat,
+                      containers,
+                      extra,
+                      pqueue,
+                      random,
+                      time,
+                      union-find,
+                      vty < 6
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+executable maze
+    main-is:          Main.hs
+
+    -- Modules included in this executable, other than Main.
+    other-modules:    UI
+
+    -- LANGUAGE extensions used by modules in this package.
+    -- other-extensions:
+    build-depends:
+        base,
+        array,
+        brick >= 0.61 && < 1,
+        containers,
+        maze,
+        microlens-platform,
+        random,
+        text,
+        time,
+        vty < 6
+
+    ghc-options: -threaded
+
+    hs-source-dirs:   app
+    default-language: Haskell2010
