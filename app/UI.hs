@@ -11,7 +11,7 @@ import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as B
 import qualified Brick.Widgets.Edit as B
 import qualified Brick.Forms as B
-import Control.Monad ((<=<))
+import Control.Monad ((<=<), unless)
 import Data.Array.IArray
 import qualified Graphics.Vty as V
 import Lens.Micro.Platform
@@ -22,6 +22,8 @@ import qualified Data.Text as T
 import Text.Read (readMaybe)
 import qualified Data.Set as Set
 import Data.Maybe (isJust)
+
+import Data.List
 
 maxRows :: Word32
 maxRows = 20
@@ -114,7 +116,8 @@ editShowableFieldWithValidate stLens n validate =
 data GameState = GameState
   { _gsMaze :: IMaze
   , _gsPos :: Coord
-  , _gsCoins :: [Coord]
+  , _gsCoins :: Int
+  , _gsCoinsPos :: [Coord]
   , _gsGen :: StdGen
   , _gsNewGameForm :: B.Form NewGameFormState MazeEvent Name
   , _gsGameMode :: GameMode
@@ -144,8 +147,8 @@ gameState g numRows numCols alg size startTime currentTime =
         Kruskal               -> kruskal g numRows numCols
       ngf = newGameForm (NewGameFormState numRows numCols alg size)
       (topLeft, _) = iMazeBounds maze
-      coins = sample (mkStdGen 42) 10 (iCoinCoords maze)
-  in GameState maze topLeft coins g' ngf (GameMode InProgress NoDialog) startTime currentTime
+      coinsPos = sample g 10 (iCoinCoords maze)
+  in GameState maze topLeft 0 coinsPos g' ngf (GameMode InProgress NoDialog) startTime currentTime
 
 gsNewGame :: GameState -> GameState
 gsNewGame gs = gameState g numRows numCols alg size st ct
@@ -182,7 +185,7 @@ drawMain gs = B.vBox
   [ B.vLimit 3 $ B.center $ B.str "Coin Hunter"
   , B.center $ B.vBox
     [ B.hCenter $ drawMaze gs
-    , B.hCenter $ status (gs ^. gsGameMode ^. gmSolvingState) (secondsElapsed gs) 0
+    , B.hCenter $ status (gs ^. gsGameMode ^. gmSolvingState) (secondsElapsed gs) (gs ^. gsCoins)
     ]
   , B.vLimit 3 $ B.center help
   ]
@@ -243,7 +246,7 @@ drawCellBig gs coord = B.vBox
   ]
   where (row, col) = (coordRow coord, coordCol coord)
         playerPos = gs ^. gsPos
-        coinsPos = gs ^. gsCoins
+        coinsPos = gs ^. gsCoinsPos
         maze = gs ^. gsMaze
         (topLeft, bottomRight) = iMazeBounds maze
         m 
@@ -301,10 +304,19 @@ gsMove gs0 dir
   | Just nPos <- iMazeMove (gs0 ^. gsMaze) (gs0 ^. gsPos) dir =
     let gs1 = gs0 & gsPos .~ nPos -- (.~) replace gsPos in gs0 with nPos
         gs2 = gs1 & gsGameMode . gmSolvingState .~ case isSolved gs1 of
-          True -> Solved (secondsElapsed gs0) 0
+          True -> Solved (secondsElapsed gs0) (gs2 ^. gsCoins)
           False -> InProgress
     in gs2
   | otherwise = gs0
+
+
+gsGetCoin :: GameState -> GameState
+gsGetCoin gs0 = 
+  if elem (gs0 ^. gsPos) (gs0 ^. gsCoinsPos) then
+    let gs1 = gs0 & gsCoins .~ (gs0 ^. gsCoins + 1)
+        gs2 = gs1 & gsCoinsPos .~ (delete (gs0 ^. gsPos) (gs1 ^. gsCoinsPos))
+    in gs2
+  else gs0
 
 handleEvent :: GameState
             -> B.BrickEvent Name MazeEvent
@@ -323,7 +335,7 @@ handleEvent gs be = case gs ^. gsGameMode ^. gmDialog of
       B.VtyEvent (V.EvKey (V.KChar 's') []) -> B.continue (gsMove gs DDown)
       B.VtyEvent (V.EvKey (V.KChar 'a') []) -> B.continue (gsMove gs DLeft)
       B.VtyEvent (V.EvKey (V.KChar 'd') []) -> B.continue (gsMove gs DRight)
-      B.AppEvent (Tick currentTime) -> B.continue (gs & gsCurrentTime .~ currentTime)
+      B.AppEvent (Tick currentTime) -> let gs1 = gsGetCoin gs in B.continue (gs1 & gsCurrentTime .~ currentTime)
       _ -> B.continue gs
     Solved _ _ -> case be of
       B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt gs

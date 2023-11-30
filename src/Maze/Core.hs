@@ -247,7 +247,7 @@ sample gen k xs
                 in xs !! index : sample newGen (k - 1) xs
 
 iCoinCoords :: IMaze -> [Coord]
-iCoinCoords maze = coords
+iCoinCoords maze = tail (init coords)
   where (_, (C hiR hiC)) = iMazeBounds maze
         coords = [C (fromInteger r) (fromInteger c)
                  | c <- [0..toInteger hiC], r <- [0..toInteger hiR]]
