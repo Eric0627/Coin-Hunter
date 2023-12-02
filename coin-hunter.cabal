@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               maze
+name:               coin-hunter
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
@@ -12,9 +12,6 @@ version:            0.1.0.0
 -- bug-reports:
 
 -- The license under which the package is released.
--- license:
-author:             Ben Selfridge
-maintainer:         benselfridge@galois.com
 
 -- A copyright notice.
 -- copyright:
@@ -54,7 +51,7 @@ library
     hs-source-dirs:   src
     default-language: Haskell2010
 
-executable maze
+executable coin-hunter
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
@@ -67,7 +64,7 @@ executable maze
         array,
         brick >= 0.61 && < 1,
         containers,
-        maze,
+        coin-hunter,
         microlens-platform,
         random,
         text,
