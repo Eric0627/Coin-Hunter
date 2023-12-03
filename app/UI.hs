@@ -165,7 +165,7 @@ mazeApp = B.App
   { B.appDraw = draw
   , B.appChooseCursor = \_ _ -> Nothing
   , B.appHandleEvent = handleEvent
-  , B.appStartEvent = startEvent
+  , B.appStartEvent = return ()
   , B.appAttrMap = attrMap
   }
 
@@ -220,13 +220,9 @@ drawCellSmall gs coord = B.vBox
         isFinish = coord == bottomRight
         isSolved = playerPos == bottomRight
         isPlayerPos = playerPos == coord
-        attr = if isPlayerPos
-               then if isFinish
-                    then "solved"
-                    else "pos"
-               else if isFinish
-                    then "finish"
-                    else "blank"
+        attr | isPlayerPos = B.attrName (if isFinish then "solved" else "pos")
+             | isFinish = B.attrName "finish"
+             | otherwise = B.attrName "blank"
 
 drawCellBig :: GameState -> Coord -> B.Widget n
 drawCellBig gs coord = B.vBox
@@ -249,8 +245,7 @@ drawCellBig gs coord = B.vBox
         coinsPos = gs ^. gsCoinsPos
         maze = gs ^. gsMaze
         (topLeft, bottomRight) = iMazeBounds maze
-        m 
-          | coord == playerPos = '*'
+        m | coord == playerPos = '*'
           | elem coord coinsPos = '$'
           | otherwise = ' '
         d = if isJust (iMazeMove maze coord DDown) then ' ' else '_'
@@ -266,12 +261,12 @@ drawCellBig gs coord = B.vBox
         isFinish = coord == bottomRight
         isCoin = elem coord coinsPos
         attr = case (isStart, isFinish, isPlayerPos, isCoin) of
-          (True, _, _, _) -> "start"
-          (_, True, True, _) -> "solved"
-          (_, True, False, _) -> "finish"
-          (False, False, True, _) -> "pos"
-          (False, False, False, True) -> "coin"
-          _ -> "blank"
+          (True, _, _, _) -> B.attrName "start"
+          (_, True, True, _) -> B.attrName "solved"
+          (_, True, False, _) -> B.attrName "finish"
+          (False, False, True, _) -> B.attrName "pos"
+          (False, False, False, True) -> B.attrName "coin"
+          _ -> B.attrName "blank"
 
 secondsElapsed :: GameState -> Int
 secondsElapsed gs = floor $ nominalDiffTimeToSeconds $
@@ -311,58 +306,63 @@ gsMove gs0 dir
 
 
 gsGetCoin :: GameState -> GameState
-gsGetCoin gs0 = 
-  if elem (gs0 ^. gsPos) (gs0 ^. gsCoinsPos) then
+gsGetCoin gs0 =
+  if (gs0 ^. gsPos) `elem` (gs0 ^. gsCoinsPos) then
     let gs1 = gs0 & gsCoins .~ (gs0 ^. gsCoins + 1)
-        gs2 = gs1 & gsCoinsPos .~ (delete (gs0 ^. gsPos) (gs1 ^. gsCoinsPos))
+        gs2 = gs1 & gsCoinsPos .~ ((gs0 ^. gsPos) `delete` (gs1 ^. gsCoinsPos))
     in gs2
   else gs0
 
-handleEvent :: GameState
-            -> B.BrickEvent Name MazeEvent
-            -> B.EventM Name (B.Next GameState)
-handleEvent gs be = case gs ^. gsGameMode ^. gmDialog of
-  NoDialog -> case gs ^. gsGameMode . gmSolvingState of
-    InProgress -> case be of
-      B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt gs
-      B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
-        B.continue (gs & gsGameMode . gmDialog .~ NewGameDialog)
-      B.VtyEvent (V.EvKey V.KUp []) -> B.continue (gsMove gs DUp)
-      B.VtyEvent (V.EvKey V.KDown []) -> B.continue (gsMove gs DDown)
-      B.VtyEvent (V.EvKey V.KLeft []) -> B.continue (gsMove gs DLeft)
-      B.VtyEvent (V.EvKey V.KRight []) -> B.continue (gsMove gs DRight)
-      B.VtyEvent (V.EvKey (V.KChar 'w') []) -> B.continue (gsMove gs DUp)
-      B.VtyEvent (V.EvKey (V.KChar 's') []) -> B.continue (gsMove gs DDown)
-      B.VtyEvent (V.EvKey (V.KChar 'a') []) -> B.continue (gsMove gs DLeft)
-      B.VtyEvent (V.EvKey (V.KChar 'd') []) -> B.continue (gsMove gs DRight)
-      B.AppEvent (Tick currentTime) -> let gs1 = gsGetCoin gs in B.continue (gs1 & gsCurrentTime .~ currentTime)
-      _ -> B.continue gs
-    Solved _ _ -> case be of
-      B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt gs
-      B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
-        B.continue (gs & gsGameMode . gmDialog .~ NewGameDialog)
-      B.AppEvent (Tick currentTime) -> B.continue (gs & gsCurrentTime .~ currentTime)
-      _ -> B.continue gs
-  NewGameDialog -> case be of
-    B.VtyEvent (V.EvKey V.KEnter []) ->
-      B.continue (gsNewGame gs)
-    B.VtyEvent (V.EvKey V.KEsc []) ->
-      B.continue (gs & gsGameMode . gmDialog .~ NoDialog)
-    B.AppEvent (Tick currentTime) -> B.continue (gs & gsCurrentTime .~ currentTime)
-    _ -> do f' <- B.handleFormEvent be (gs ^. gsNewGameForm)
-            B.continue (gs & gsNewGameForm .~ f')
-
-startEvent :: GameState -> B.EventM Name GameState
-startEvent gs = return gs
+handleEvent :: B.BrickEvent Name MazeEvent -> B.EventM Name GameState ()
+handleEvent be = do
+  gs <- B.get
+  case gs ^. (gsGameMode . gmDialog) of
+    NoDialog -> case gs ^. gsGameMode . gmSolvingState of
+      InProgress -> case be of
+        B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
+        B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
+          B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
+        B.VtyEvent (V.EvKey V.KUp []) ->
+          B.put (gsMove gs DUp)
+        B.VtyEvent (V.EvKey V.KDown []) ->
+          B.put (gsMove gs DDown)
+        B.VtyEvent (V.EvKey V.KLeft []) ->
+          B.put (gsMove gs DLeft)
+        B.VtyEvent (V.EvKey V.KRight []) ->
+          B.put (gsMove gs DRight)
+        B.VtyEvent (V.EvKey (V.KChar 'w') []) ->
+          B.put (gsMove gs DUp)
+        B.VtyEvent (V.EvKey (V.KChar 's') []) ->
+          B.put (gsMove gs DDown)
+        B.VtyEvent (V.EvKey (V.KChar 'a') []) ->
+          B.put (gsMove gs DLeft)
+        B.VtyEvent (V.EvKey (V.KChar 'd') []) ->
+          B.put (gsMove gs DRight)
+        B.AppEvent (Tick currentTime) -> let gs1 = gsGetCoin gs in
+          B.put (gs1 & gsCurrentTime .~ currentTime)
+        _ -> B.put gs
+      Solved _ _ -> case be of
+        B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
+        B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
+          B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
+        B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
+        _ -> B.put gs
+    NewGameDialog -> case be of
+      B.VtyEvent (V.EvKey V.KEnter []) ->
+        B.put (gsNewGame gs)
+      B.VtyEvent (V.EvKey V.KEsc []) ->
+        B.put (gs & gsGameMode . gmDialog .~ NoDialog)
+      B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
+      _ -> zoom gsNewGameForm $ B.handleFormEvent be
 
 attrMap :: GameState -> B.AttrMap
 attrMap _ = B.attrMap V.defAttr
-  [ ("start", V.withForeColor V.defAttr V.blue)
-  , ("finish", V.withBackColor V.defAttr V.red)
-  , ("solved", V.withBackColor V.defAttr V.green)
-  , ("blank", V.defAttr)
-  , ("pos", V.withForeColor V.defAttr V.blue)
-  , ("coin", V.withForeColor V.defAttr (V.rgbColor 255 215 0))
+  [ (B.attrName "start", V.withForeColor V.defAttr V.blue)
+  , (B.attrName "finish", V.withBackColor V.defAttr V.red)
+  , (B.attrName "solved", V.withBackColor V.defAttr V.green)
+  , (B.attrName "blank", V.defAttr)
+  , (B.attrName "pos", V.withForeColor V.defAttr V.blue)
+  , (B.attrName "coin", V.withForeColor V.defAttr (V.rgbColor 255 215 0))
   , (B.formAttr, V.defAttr)
   , (B.editAttr, V.white `B.on` V.black)
   , (B.editFocusedAttr, V.black `B.on` V.yellow)

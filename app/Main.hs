@@ -1,15 +1,14 @@
 module Main where
 
-import UI
-
-import Control.Monad (void, forever)
-
 import Brick
 import Brick.BChan
+import Control.Concurrent
+import Control.Monad (forever, void)
 import Data.Time.Clock
 import Graphics.Vty
-import Control.Concurrent
+import Graphics.Vty.Platform.Unix (mkVty)
 import System.Random
+import UI
 
 main :: IO ()
 main = do
@@ -23,9 +22,10 @@ main = do
 
   st <- getCurrentTime
   g <- getStdGen
-  void $ customMain
-    initialVty
-    builder
-    (Just eventChannel)
-    mazeApp
-    (gameState g 10 10 RecursiveBacktracking Big st st)
+  void $
+    customMain
+      initialVty
+      builder
+      (Just eventChannel)
+      mazeApp
+      (gameState g 10 10 RecursiveBacktracking Big st st)

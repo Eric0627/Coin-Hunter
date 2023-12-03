@@ -35,9 +35,9 @@ library
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base >=4.14,
+    build-depends:    base,
                       array,
-                      brick >= 0.61 && < 1,
+                      brick,
                       microlens-platform,
                       text,
                       combinat,
@@ -47,7 +47,7 @@ library
                       random,
                       time,
                       union-find,
-                      vty < 6
+                      vty
     hs-source-dirs:   src
     default-language: Haskell2010
 
@@ -62,16 +62,45 @@ executable coin-hunter
     build-depends:
         base,
         array,
-        brick >= 0.61 && < 1,
+        brick,
         containers,
         coin-hunter,
         microlens-platform,
         random,
         text,
         time,
-        vty < 6
+        vty,
+        vty-unix
 
     ghc-options: -threaded
 
     hs-source-dirs:   app
     default-language: Haskell2010
+
+executable Server
+    main-is:          Server.hs
+    exposed-modules:  Server
+
+    build-depends:    base
+                    , bytestring
+                    , websockets
+                    , parsec
+                    , process
+                    , coin-hunter
+    hs-source-dirs:   app
+    default-language: Haskell2010
+    ghc-options: -threaded
+
+executable Client
+    main-is:          Client.hs
+
+    build-depends:    base
+                    , vty
+                    , text
+                    , brick
+                    , bytestring
+                    , websockets
+                    , coin-hunter
+    hs-source-dirs:   app
+    default-language: Haskell2010
+    ghc-options: -threaded
