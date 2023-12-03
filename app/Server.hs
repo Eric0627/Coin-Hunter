@@ -44,5 +44,5 @@ server pending = do
 
 main :: IO ()
 main = do
-  system "clear"
+  putStrLn "Starting server..."
   runServer "0.0.0.0" 9160 server

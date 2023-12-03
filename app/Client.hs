@@ -32,12 +32,12 @@ showMessage :: String -> Widget n
 showMessage = center . str
 
 drawUI :: State -> [Widget n]
-drawUI (State _ '\0') = [showMessage "Let's start!"]
+-- drawUI (State _ '\0') = [showMessage "Let's start!"]
 drawUI (State _ 'w') = [showMessage "↑"]
 drawUI (State _ 'a') = [showMessage "←"]
 drawUI (State _ 's') = [showMessage "↓"]
 drawUI (State _ 'd') = [showMessage "→"]
-drawUI _ = [showMessage "What was that?"]
+drawUI _ = [showMessage "Press arrow or wasd keys to move, ESC to quit"]
 
 handleEvent :: BrickEvent n e -> EventM n State ()
 handleEvent (VtyEvent (EvKey KEsc [])) = halt
@@ -67,4 +67,3 @@ client conn = void (defaultMain app (State conn '\0'))
 main :: IO ()
 main = do
   runClient "localhost" 9160 "" client
-  return ()
