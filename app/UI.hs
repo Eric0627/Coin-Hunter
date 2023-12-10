@@ -45,7 +45,7 @@ data Name = NGFNumRows
 -- matter how often these ticks are received, as long as they are requently
 -- enough that we can know how many seconds has passed (so something like every
 -- tenth of a second should be sufficient).
-data MazeEvent = Tick UTCTime
+data MazeEvent = Tick UTCTime | ClientMove Direction | Q
 
 data Dialog = NoDialog
             | NewGameDialog
@@ -313,47 +313,74 @@ gsGetCoin gs0 =
     in gs2
   else gs0
 
+-- handleEvent :: B.BrickEvent Name MazeEvent -> B.EventM Name GameState ()
+-- handleEvent be = do
+--   gs <- B.get
+--   case gs ^. (gsGameMode . gmDialog) of
+--     NoDialog -> case gs ^. gsGameMode . gmSolvingState of
+--       InProgress -> case be of
+--         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
+--         B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
+--           B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
+--         B.VtyEvent (V.EvKey V.KUp []) ->
+--           B.put (gsMove gs DUp)
+--         B.VtyEvent (V.EvKey V.KDown []) ->
+--           B.put (gsMove gs DDown)
+--         B.VtyEvent (V.EvKey V.KLeft []) ->
+--           B.put (gsMove gs DLeft)
+--         B.VtyEvent (V.EvKey V.KRight []) ->
+--           B.put (gsMove gs DRight)
+--         B.VtyEvent (V.EvKey (V.KChar 'w') []) ->
+--           B.put (gsMove gs DUp)
+--         B.VtyEvent (V.EvKey (V.KChar 's') []) ->
+--           B.put (gsMove gs DDown)
+--         B.VtyEvent (V.EvKey (V.KChar 'a') []) ->
+--           B.put (gsMove gs DLeft)
+--         B.VtyEvent (V.EvKey (V.KChar 'd') []) ->
+--           B.put (gsMove gs DRight)
+--         B.AppEvent (Tick currentTime) -> let gs1 = gsGetCoin gs in
+--           B.put (gs1 & gsCurrentTime .~ currentTime)
+--         _ -> B.put gs
+--       Solved _ _ -> case be of
+--         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
+--         B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
+--           B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
+--         B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
+--         _ -> B.put gs
+--     NewGameDialog -> case be of
+--       B.VtyEvent (V.EvKey V.KEnter []) ->
+--         B.put (gsNewGame gs)
+--       B.VtyEvent (V.EvKey V.KEsc []) ->
+--         B.put (gs & gsGameMode . gmDialog .~ NoDialog)
+--       B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
+--       _ -> zoom gsNewGameForm $ B.handleFormEvent be
 handleEvent :: B.BrickEvent Name MazeEvent -> B.EventM Name GameState ()
-handleEvent be = do
+handleEvent event = do
   gs <- B.get
-  case gs ^. (gsGameMode . gmDialog) of
-    NoDialog -> case gs ^. gsGameMode . gmSolvingState of
-      InProgress -> case be of
-        B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
-        B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
+  case event of
+    -- Handle key events for player movement
+    B.VtyEvent (V.EvKey V.KUp []) -> B.put (gsMove gs DUp)
+    B.VtyEvent (V.EvKey V.KDown []) -> B.put (gsMove gs DDown)
+    B.VtyEvent (V.EvKey V.KLeft []) -> B.put (gsMove gs DLeft)
+    B.VtyEvent (V.EvKey V.KRight []) -> B.put (gsMove gs DRight)
+    B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
+    B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
           B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
-        B.VtyEvent (V.EvKey V.KUp []) ->
-          B.put (gsMove gs DUp)
-        B.VtyEvent (V.EvKey V.KDown []) ->
-          B.put (gsMove gs DDown)
-        B.VtyEvent (V.EvKey V.KLeft []) ->
-          B.put (gsMove gs DLeft)
-        B.VtyEvent (V.EvKey V.KRight []) ->
-          B.put (gsMove gs DRight)
-        B.VtyEvent (V.EvKey (V.KChar 'w') []) ->
-          B.put (gsMove gs DUp)
-        B.VtyEvent (V.EvKey (V.KChar 's') []) ->
-          B.put (gsMove gs DDown)
-        B.VtyEvent (V.EvKey (V.KChar 'a') []) ->
-          B.put (gsMove gs DLeft)
-        B.VtyEvent (V.EvKey (V.KChar 'd') []) ->
-          B.put (gsMove gs DRight)
-        B.AppEvent (Tick currentTime) -> let gs1 = gsGetCoin gs in
-          B.put (gs1 & gsCurrentTime .~ currentTime)
-        _ -> B.put gs
-      Solved _ _ -> case be of
-        B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
-        B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
-          B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
-        B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
-        _ -> B.put gs
-    NewGameDialog -> case be of
-      B.VtyEvent (V.EvKey V.KEnter []) ->
-        B.put (gsNewGame gs)
-      B.VtyEvent (V.EvKey V.KEsc []) ->
-        B.put (gs & gsGameMode . gmDialog .~ NoDialog)
-      B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
-      _ -> zoom gsNewGameForm $ B.handleFormEvent be
+    
+    -- Handle custom ClientMove event from the server
+    B.AppEvent (ClientMove dir) -> B.put (gsMove gs dir)
+    B.AppEvent Q -> B.halt
+    -- B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
+    --       B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
+
+    -- Handle Tick event for updating the game state based on time
+    B.AppEvent (Tick currentTime) -> 
+      let gs1 = gsGetCoin gs in
+      B.put (gs1 & gsCurrentTime .~ currentTime)
+
+    -- Other events and default
+    _ -> B.put gs
+
 
 attrMap :: GameState -> B.AttrMap
 attrMap _ = B.attrMap V.defAttr
