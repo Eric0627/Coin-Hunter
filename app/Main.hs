@@ -17,8 +17,12 @@ main = do
   eventChannel <- newBChan 10
   void . forkIO $ forever $ do
     t <- getCurrentTime
-    writeBChan eventChannel (Tick t)
+    writeBChan eventChannel (TimeTick t)
     threadDelay 100000
+  void . forkIO $ forever $ do
+    t <- getCurrentTime
+    writeBChan eventChannel (MonsterTick t) -- decide how fast monsters move
+    threadDelay 1000000 -- Delay for 0.5 seconds
 
   st <- getCurrentTime
   g <- getStdGen
@@ -28,4 +32,4 @@ main = do
       builder
       (Just eventChannel)
       mazeApp
-      (gameState g 10 10 RecursiveBacktracking Big st st)
+      (gameState g 10 10 BinaryTree Big st st)

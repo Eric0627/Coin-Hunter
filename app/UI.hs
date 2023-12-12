@@ -45,7 +45,7 @@ data Name = NGFNumRows
 -- matter how often these ticks are received, as long as they are requently
 -- enough that we can know how many seconds has passed (so something like every
 -- tenth of a second should be sufficient).
-data MazeEvent = Tick UTCTime
+data MazeEvent = TimeTick UTCTime | MonsterTick UTCTime
 
 data Dialog = NoDialog
             | NewGameDialog
@@ -118,6 +118,7 @@ data GameState = GameState
   , _gsPos :: Coord
   , _gsCoins :: Int
   , _gsCoinsPos :: [Coord]
+  , _gsMonstersPos :: [Coord]
   , _gsGen :: StdGen
   , _gsNewGameForm :: B.Form NewGameFormState MazeEvent Name
   , _gsGameMode :: GameMode
@@ -141,14 +142,15 @@ gameState _ numRows numCols _ _ _ _
   | numRows <= 0 = error "PANIC: gameState called with non-positive number of rows"
   | numCols <= 0 = error "PANIC: gameState called with non-positive number of columns"
 gameState g numRows numCols alg size startTime currentTime =
-  let (maze, g') = case alg of
+  let (maze, g1) = case alg of
         RecursiveBacktracking -> recursiveBacktracking g numRows numCols
         BinaryTree            -> binaryTree g numRows numCols
         Kruskal               -> kruskal g numRows numCols
       ngf = newGameForm (NewGameFormState numRows numCols alg size)
       (topLeft, _) = iMazeBounds maze
-      coinsPos = sample g 10 (iCoinCoords maze)
-  in GameState maze topLeft 0 coinsPos g' ngf (GameMode InProgress NoDialog) startTime currentTime
+      (coinsPos, g2) = sample g1 10 (iCoinCoords maze)
+      (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
+  in GameState maze topLeft 0 coinsPos monstersPos g3 ngf (GameMode InProgress NoDialog) startTime currentTime
 
 gsNewGame :: GameState -> GameState
 gsNewGame gs = gameState g numRows numCols alg size st ct
@@ -243,9 +245,11 @@ drawCellBig gs coord = B.vBox
   where (row, col) = (coordRow coord, coordCol coord)
         playerPos = gs ^. gsPos
         coinsPos = gs ^. gsCoinsPos
+        monstersPos = gs ^. gsMonstersPos
         maze = gs ^. gsMaze
         (topLeft, bottomRight) = iMazeBounds maze
         m | coord == playerPos = '*'
+          | elem coord monstersPos = 'x'
           | elem coord coinsPos = '$'
           | otherwise = ' '
         d = if isJust (iMazeMove maze coord DDown) then ' ' else '_'
@@ -260,12 +264,14 @@ drawCellBig gs coord = B.vBox
         isStart = coord == topLeft
         isFinish = coord == bottomRight
         isCoin = elem coord coinsPos
-        attr = case (isStart, isFinish, isPlayerPos, isCoin) of
-          (True, _, _, _) -> B.attrName "start"
-          (_, True, True, _) -> B.attrName "solved"
-          (_, True, False, _) -> B.attrName "finish"
-          (False, False, True, _) -> B.attrName "pos"
-          (False, False, False, True) -> B.attrName "coin"
+        isMonster = elem coord monstersPos
+        attr = case (isStart, isFinish, isPlayerPos, isCoin, isMonster) of
+          (True, _, _, _, _) -> B.attrName "start"
+          (_, True, True, _, _) -> B.attrName "solved"
+          (_, True, False, _, _) -> B.attrName "finish"
+          (False, False, True, _, _) -> B.attrName "pos"
+          (False, False, False, True, False) -> B.attrName "coin"
+          (False, False, False, _, True) -> B.attrName "monster"
           _ -> B.attrName "blank"
 
 secondsElapsed :: GameState -> Int
@@ -298,10 +304,11 @@ gsMove :: GameState -> Direction -> GameState
 gsMove gs0 dir
   | Just nPos <- iMazeMove (gs0 ^. gsMaze) (gs0 ^. gsPos) dir =
     let gs1 = gs0 & gsPos .~ nPos -- (.~) replace gsPos in gs0 with nPos
-        gs2 = gs1 & gsGameMode . gmSolvingState .~ case isSolved gs1 of
-          True -> Solved (secondsElapsed gs0) (gs2 ^. gsCoins)
+        gs2 = gsGetCoin gs1
+        gs3 = gs2 & gsGameMode . gmSolvingState .~ case isSolved gs2 of
+          True -> Solved (secondsElapsed gs0) (gs3 ^. gsCoins)
           False -> InProgress
-    in gs2
+    in gs3
   | otherwise = gs0
 
 
@@ -312,6 +319,17 @@ gsGetCoin gs0 =
         gs2 = gs1 & gsCoinsPos .~ ((gs0 ^. gsPos) `delete` (gs1 ^. gsCoinsPos))
     in gs2
   else gs0
+
+gsMoveMonsters :: GameState -> GameState
+gsMoveMonsters gs0 = 
+    let (dirs, newGen) = sample (gs0 ^. gsGen) 5 [DDown, DUp, DLeft, DRight]
+        gs1 = gs0 & gsGen .~ newGen
+        gs2 = gs1 & gsMonstersPos .~ (zipWith moveMonster dirs (gs1 ^. gsMonstersPos)) -- (.~) replace gsPos in gs0 with nPos
+    in gs2
+  where moveMonster dir c
+          | Just nPos <- iMazeMove (gs0 ^. gsMaze) c dir =
+            nPos
+          | otherwise = c
 
 handleEvent :: B.BrickEvent Name MazeEvent -> B.EventM Name GameState ()
 handleEvent be = do
@@ -338,21 +356,21 @@ handleEvent be = do
           B.put (gsMove gs DLeft)
         B.VtyEvent (V.EvKey (V.KChar 'd') []) ->
           B.put (gsMove gs DRight)
-        B.AppEvent (Tick currentTime) -> let gs1 = gsGetCoin gs in
-          B.put (gs1 & gsCurrentTime .~ currentTime)
+        B.AppEvent (TimeTick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)                             
+        B.AppEvent (MonsterTick currentTime) -> B.put (gsMoveMonsters gs)
         _ -> B.put gs
       Solved _ _ -> case be of
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
           B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
-        B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
+        B.AppEvent (TimeTick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
         _ -> B.put gs
     NewGameDialog -> case be of
       B.VtyEvent (V.EvKey V.KEnter []) ->
         B.put (gsNewGame gs)
       B.VtyEvent (V.EvKey V.KEsc []) ->
         B.put (gs & gsGameMode . gmDialog .~ NoDialog)
-      B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
+      B.AppEvent (TimeTick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
       _ -> zoom gsNewGameForm $ B.handleFormEvent be
 
 attrMap :: GameState -> B.AttrMap
@@ -363,6 +381,7 @@ attrMap _ = B.attrMap V.defAttr
   , (B.attrName "blank", V.defAttr)
   , (B.attrName "pos", V.withForeColor V.defAttr V.blue)
   , (B.attrName "coin", V.withForeColor V.defAttr (V.rgbColor 255 215 0))
+  , (B.attrName "monster", V.withForeColor V.defAttr V.red)
   , (B.formAttr, V.defAttr)
   , (B.editAttr, V.white `B.on` V.black)
   , (B.editFocusedAttr, V.black `B.on` V.yellow)

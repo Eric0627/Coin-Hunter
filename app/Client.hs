@@ -66,4 +66,5 @@ client conn = void (defaultMain app (State conn '\0'))
 
 main :: IO ()
 main = do
+  putStrLn "Connecting server..."
   runClient "localhost" 9160 "" client

@@ -239,12 +239,11 @@ iMazeCoords maze = rows
 -- >>> sample (mkStdGen 42) 3 [(C 1 2), (C 2 2), (C 3 2), (C 4 2), (C 5 2)]
 -- [C {coordRow = 4, coordCol = 2},C {coordRow = 2, coordCol = 2},C {coordRow = 2, coordCol = 2}]
 --
-sample :: (RandomGen g) => g -> Int -> [a] -> [a]
-sample _ 0 _ = []
-sample gen k xs
-  | k >= length xs = xs
-  | otherwise = let (index, newGen) = randomR (0, length xs - 1) gen
-                in xs !! index : sample newGen (k - 1) xs
+sample :: (RandomGen g) => g -> Int -> [a] -> ([a], g)
+sample gen 0 _ = ([], gen)
+sample gen k xs = let (index, g') = randomR (0, length xs - 1) gen
+                      (xs', g'') = sample g' (k - 1) xs
+                in ((xs !! index : xs'), g'')
 
 iCoinCoords :: IMaze -> [Coord]
 iCoinCoords maze = tail (init coords)
