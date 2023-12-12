@@ -15,21 +15,16 @@ main = do
   let builder = mkVty defaultConfig
   initialVty <- builder
   eventChannel <- newBChan 10
-  void . forkIO $ forever $ do
-    t <- getCurrentTime
-    writeBChan eventChannel (TimeTick t)
-    threadDelay 100000
-  void . forkIO $ forever $ do
-    t <- getCurrentTime
-    writeBChan eventChannel (MonsterTick t) -- decide how fast monsters move
-    threadDelay 1000000 -- Delay for 0.5 seconds
+  forkIO $ forever $ getCurrentTime >>= writeBChan eventChannel . Tick
+    >> threadDelay 100000  -- tick every 0.1 seconds
+  forkIO $ forever $ writeBChan eventChannel MonsterTick
+    >> threadDelay 1000000  -- move monster every second
 
   st <- getCurrentTime
   g <- getStdGen
-  void $
-    customMain
-      initialVty
-      builder
-      (Just eventChannel)
-      mazeApp
-      (gameState g 10 10 BinaryTree Big st st)
+  void $ customMain
+    initialVty
+    builder
+    (Just eventChannel)
+    mazeApp
+    (gameState g 10 10 BinaryTree Big st st)
