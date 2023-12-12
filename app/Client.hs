@@ -26,7 +26,7 @@ updateCommand' :: Char -> EventM n State ()
 updateCommand' c = do
   s@(State conn _) <- get
   put s {command = c}
-  when (c `elem` ['w', 'a', 's', 'd']) (liftIO . sendTextData conn . pack $ [c])
+  when (c `elem` ['w', 'a', 's', 'd', 'q']) (liftIO . sendTextData conn . pack $ [c])
 
 showMessage :: String -> Widget n
 showMessage = center . str
@@ -42,12 +42,14 @@ drawUI _ = [showMessage "Press arrow or wasd keys to move, ESC to quit"]
 handleEvent :: BrickEvent n e -> EventM n State ()
 handleEvent (VtyEvent (EvKey KEsc [])) = halt
 handleEvent (VtyEvent (EvKey (KChar c) []))
-  | c `elem` ['w', 'a', 's', 'd'] = updateCommand' c
+  | c `elem` ['w', 'a', 's', 'd', 'q'] = updateCommand' c
   | otherwise = updateCommand' '?'
 handleEvent (VtyEvent (EvKey KUp [])) = updateCommand' 'w'
 handleEvent (VtyEvent (EvKey KLeft [])) = updateCommand' 'a'
 handleEvent (VtyEvent (EvKey KDown [])) = updateCommand' 's'
 handleEvent (VtyEvent (EvKey KRight [])) = updateCommand' 'd'
+-- handleEvent (VtyEvent (EvKey (KChar 'q') [])) = updateCommand' 'q'
+
 handleEvent (VtyEvent (EvKey _ [])) = updateCommand' '?'
 handleEvent ev = return ()
 
