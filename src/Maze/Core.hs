@@ -9,9 +9,7 @@
 -- when we're done, using mutable and immutable arrays.
 module Maze.Core
   ( -- * Coordinates, directions, and walls
-    Coord
-  , coordRow
-  , coordCol
+    Coord(..)
   , Wall
   , wallNeighbors
   , wallDirection
@@ -63,6 +61,9 @@ data Coord = C { coordRow :: Word32
                  -- ^ @0@-indexed column of coordinate
                }
   deriving (Show, Eq, Ord, Ix)
+
+newCoord :: Word32 -> Word32 -> Coord
+newCoord = C
 
 -- | Unique identifier for a wall separating two cells of a maze. Note that in
 -- the context of a particular maze, a wall could be either "on" or "off" -- if
