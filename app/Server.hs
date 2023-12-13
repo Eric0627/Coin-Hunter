@@ -33,7 +33,7 @@ mazeGen eventChannel = do
     initialVty
     builder
     (Just eventChannel)
-    mazeApp (gameState 4 g 10 10 RecursiveBacktracking Big st st)
+    mazeApp (initGameState 10 10 4 RecursiveBacktracking Big g st st)
 
 data Command = Move Maze.Core.Direction | Quit deriving (Show, Eq)
 

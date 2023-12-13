@@ -20,7 +20,7 @@ import Data.Word (Word32)
 import qualified Graphics.Vty as V
 import Lens.Micro.Platform
 import Maze
-import System.Random (StdGen)
+import System.Random (StdGen, getStdGen)
 import Text.Read (readMaybe)
 
 maxRows :: Word32
@@ -29,9 +29,13 @@ maxRows = 20
 maxCols :: Word32
 maxCols = 40
 
+maxPlayers :: Word32
+maxPlayers = 10
+
 data Name
   = NGFNumRows
   | NGFNumCols
+  | NGFNPlayers
   | NGFRecursiveBacktracking
   | NGFBinaryTree
   | NGFKruskal
@@ -53,6 +57,7 @@ data Dialog
 data SolvingState
   = InProgress
   | Solved Int Int
+  | NewGame
 
 data GameMode = GameMode
   { _gmSolvingState :: SolvingState,
@@ -73,6 +78,7 @@ data Size = Big | Small
 data NewGameFormState = NewGameFormState
   { _ngfNumRows :: Word32,
     _ngfNumCols :: Word32,
+    _ngfNPlayers :: Word32,
     _ngfAlgorithm :: Algorithm,
     _ngfSize :: Size
   }
@@ -82,9 +88,11 @@ makeLenses ''NewGameFormState
 newGameForm :: NewGameFormState -> B.Form NewGameFormState e Name
 newGameForm =
   B.newForm
-    [ B.padBottom (B.Pad 1) . label ("# rows (<=" ++ show maxRows ++ "): ")
+    [ B.padBottom (B.Pad 1) . label "# players: "
+        B.@@= B.editShowableFieldWithValidate ngfNPlayers NGFNPlayers validN,
+      B.padBottom (B.Pad 1) . label ("# rows (3-" ++ show maxRows ++ "): ")
         B.@@= B.editShowableFieldWithValidate ngfNumRows NGFNumRows validRow,
-      B.padBottom (B.Pad 1) . label ("# cols (<=" ++ show maxCols ++ "): ")
+      B.padBottom (B.Pad 1) . label ("# cols (3-" ++ show maxCols ++ "): ")
         B.@@= B.editShowableFieldWithValidate ngfNumCols NGFNumCols validCol,
       B.padBottom (B.Pad 1) . label "algorithm: "
         B.@@= B.radioField
@@ -102,8 +110,9 @@ newGameForm =
     ]
   where
     label s w = B.vLimit 1 (B.hLimit 15 $ B.str s B.<+> B.fill ' ') B.<+> w
-    validRow r = 1 <= r && r <= maxRows
-    validCol c = 1 <= c && c <= maxCols
+    validN n = 1 <= n && n <= maxPlayers
+    validRow r = 3 <= r && r <= maxRows
+    validCol c = 3 <= c && c <= maxCols
 
 -- | This will be merged into @brick@, so we can remove it at some point
 editShowableFieldWithValidate ::
@@ -126,7 +135,8 @@ editShowableFieldWithValidate stLens n validate = B.editField stLens n limit ini
 
 data Player = Player
   { _pPos :: Coord,
-    _pCoins :: Int
+    _pCoins :: Int,
+    _pSolved :: Bool
   }
 
 makeLenses ''Player
@@ -153,21 +163,17 @@ data GameState = GameState
 
 makeLenses ''GameState
 
-gameState ::
-  Int ->
-  StdGen ->
+initGameState ::
+  Word32 ->
   Word32 ->
   Word32 ->
   Algorithm ->
   Size ->
+  StdGen ->
   UTCTime ->
   UTCTime ->
   GameState
-gameState _ _ numRows numCols _ _ _ _
-  | numRows <= 0 = error "PANIC: gameState called with non-positive number of rows"
-  | numCols <= 0 = error "PANIC: gameState called with non-positive number of columns"
-gameState n g numRows numCols alg size startTime currentTime =
-  GameState maze players coinsPos monstersPos g3 ngf (GameMode InProgress NewGameDialog) startTime currentTime
+initGameState numRows numCols n alg size g = GameState maze players coinsPos monstersPos g3 ngf (GameMode NewGame NewGameDialog)
   where
     (maze, g1) = case alg of
       RecursiveBacktracking -> recursiveBacktracking g numRows numCols
@@ -176,14 +182,14 @@ gameState n g numRows numCols alg size startTime currentTime =
     (topLeft, _) = iMazeBounds maze
     (coinsPos, g2) = sample g1 10 (iCoinCoords maze)
     (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
-    players = replicate n (Player topLeft 0)
-    ngf = newGameForm (NewGameFormState numRows numCols alg size)
+    players = replicate (fromIntegral n) (Player topLeft 0 False)
+    ngf = newGameForm (NewGameFormState numRows numCols (fromIntegral n) alg size)
 
 restartGame :: GameState -> IO GameState
 restartGame gs = do
-  ct <- getCurrentTime
+  st <- getCurrentTime
 
-  return $ gameState n g numRows numCols alg size ct ct
+  return $ initGameState numRows numCols (fromIntegral n) alg size g st st
   where
     g = gs ^. gsGen -- (^.) get gsGen in gs
     gf = B.formState $ gs ^. gsNewGameForm
@@ -191,13 +197,7 @@ restartGame gs = do
     size = gf ^. ngfSize
     numRows = gf ^. ngfNumRows
     numCols = gf ^. ngfNumCols
-    n = length (gs ^. gsPlayers)
-
--- gs
---   { _gsStartTime = ct,
---     _gsCurrentTime = ct,
---     _gsGameMode = GameMode InProgress NoDialog
---   }
+    n = gf ^. ngfNPlayers
 
 mazeApp :: B.App GameState MazeEvent Name
 mazeApp =
@@ -263,7 +263,7 @@ drawCellSmall gs coord =
   where
     (row, col) = (coordRow coord, coordCol coord)
     players = gs ^. gsPlayers
-    playerPos = players ^. to head . pPos
+    playerPos0 = players ^. to head . pPos
     maze = gs ^. gsMaze
     (_, bottomRight) = iMazeBounds maze
     dC = if isJust (iMazeMove maze coord DDown) then ' ' else '─'
@@ -273,11 +273,10 @@ drawCellSmall gs coord =
       | row /= 0 = ""
       | col /= 0 = "─ \n"
       | otherwise = " ─ \n"
+    isPlayerPos0 = playerPos0 == coord
     isFinish = coord == bottomRight
-    isSolved = playerPos == bottomRight
-    isPlayerPos = playerPos == coord
     attr
-      | isPlayerPos = B.attrName (if isFinish then "solved" else "pos")
+      | isPlayerPos0 = B.attrName (if isFinish then "solved" else "pos")
       | isFinish = B.attrName "finish"
       | otherwise = B.attrName "blank"
 
@@ -300,13 +299,13 @@ drawCellBig gs coord =
     ]
   where
     (row, col) = (coordRow coord, coordCol coord)
-    playerPos = gs ^. gsPlayers . to head . pPos
+    playerPos0 = gs ^. gsPlayers . to head . pPos
     coinsPos = gs ^. gsCoinsPos
     monstersPos = gs ^. gsMonstersPos
     maze = gs ^. gsMaze
     (topLeft, bottomRight) = iMazeBounds maze
     m
-      | coord == playerPos = '*'
+      | coord == playerPos0 = '*'
       | coord `elem` monstersPos = 'x'
       | coord `elem` coinsPos = '$'
       | otherwise = ' '
@@ -318,7 +317,7 @@ drawCellBig gs coord =
     topBorder = if row == 0 then "────" else ""
     topLeftBorder = if coord == topLeft then "┌" else ""
 
-    isPlayerPos = coord == playerPos
+    isPlayerPos = coord == playerPos0
     isStart = coord == topLeft
     isFinish = coord == bottomRight
     isCoin = coord `elem` coinsPos
@@ -341,13 +340,14 @@ secondsElapsed gs =
 status :: SolvingState -> Int -> Int -> B.Widget n
 status InProgress i j = B.str $ "Time: " ++ show i ++ "s" ++ " Coins: " ++ show j
 status (Solved i j) _ _ = B.str $ "Solved in " ++ show i ++ "s with " ++ show j ++ " coins! Nice job!"
+status NewGame _ _ = B.str "New game. Like how are you even seeing this?"
 
 help :: B.Widget n
 help =
   B.hBox
     [ B.padLeftRight 1 $
         B.vBox
-          [ B.str "up/down/left/right",
+          [ B.str "↑←↓→/wasd",
             B.str "n",
             B.str "q"
           ],
@@ -360,33 +360,32 @@ help =
     ]
 
 isSolved :: GameState -> Bool
-isSolved gs = (gs ^. gsPlayers . to head . pPos) == snd (iMazeBounds $ gs ^. gsMaze)
-
--- isSolved _ = False -- for now
+isSolved gs = all (^. pSolved) (gs ^. gsPlayers)
 
 gsMove :: Int -> GameState -> Direction -> GameState
 gsMove i gs dir = case nPos of
   Just nPos -> gs''
     where
-      gs' = gsGetCoin' i (gs & gsPlayers .~ (players & ix i .~ (p & pPos .~ nPos)))
-      gs'' = gs' & gsGameMode . gmSolvingState .~ (if isSolved gs' then Solved (secondsElapsed gs) coins else InProgress)
+      goal = snd (iMazeBounds $ gs ^. gsMaze)
+      gs' = gsGetCoin i (gs & gsPlayers .~ (players & ix i .~ p {_pPos = nPos, _pSolved = nPos == goal}))
+      coins = p ^. pCoins
+      gs'' = (if isSolved gs' then gsGameMode . gmSolvingState .~ Solved (secondsElapsed gs) coins else id) gs'
   Nothing -> gs
   where
     players = gs ^. gsPlayers
     p = players ^. to (!! i)
     nPos = iMazeMove (gs ^. gsMaze) (p ^. pPos) dir
-    coins = p ^. pCoins
 
-gsGetCoin' :: Int -> GameState -> GameState
-gsGetCoin' i gs = case (p ^. pPos) `elem` (gs ^. gsCoinsPos) of
+gsGetCoin :: Int -> GameState -> GameState
+gsGetCoin i gs = case (p ^. pPos) `elem` (gs ^. gsCoinsPos) of
   True -> gs''
     where
       gs' = gs & gsPlayers .~ (players & (ix i .~ (p & pCoins +~ 1)))
       gs'' = gs' & gsCoinsPos .~ ((p ^. pPos) `delete` (gs' ^. gsCoinsPos))
   False -> gs
   where
-    p = gs ^. gsPlayers . to (!! i)
     players = gs ^. gsPlayers
+    p = players !! i
 
 gsMoveMonsters :: GameState -> GameState
 gsMoveMonsters gs = gs''
@@ -404,32 +403,40 @@ gsMove0 = gsMove 0
 handleEvent :: B.BrickEvent Name MazeEvent -> B.EventM Name GameState ()
 handleEvent event = do
   gs <- B.get
-  case gs ^. (gsGameMode . gmDialog) of
-    NoDialog -> case gs ^. gsGameMode . gmSolvingState of
+  let mode = gs ^. gsGameMode
+      solvingState = mode ^. gmSolvingState
+  case mode ^. gmDialog of
+    NoDialog -> case solvingState of
       InProgress -> case event of
         -- Handle key events for player movement
         B.VtyEvent (V.EvKey V.KUp []) -> B.put (gsMove0 gs DUp)
-        B.VtyEvent (V.EvKey V.KDown []) -> B.put (gsMove0 gs DDown)
         B.VtyEvent (V.EvKey V.KLeft []) -> B.put (gsMove0 gs DLeft)
+        B.VtyEvent (V.EvKey V.KDown []) -> B.put (gsMove0 gs DDown)
         B.VtyEvent (V.EvKey V.KRight []) -> B.put (gsMove0 gs DRight)
+        B.VtyEvent (V.EvKey (V.KChar 'w') []) -> B.put (gsMove0 gs DUp)
+        B.VtyEvent (V.EvKey (V.KChar 'a') []) -> B.put (gsMove0 gs DLeft)
+        B.VtyEvent (V.EvKey (V.KChar 's') []) -> B.put (gsMove0 gs DDown)
+        B.VtyEvent (V.EvKey (V.KChar 'd') []) -> B.put (gsMove0 gs DRight)
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
         -- Handle custom events
         B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
-        -- TODO: change gsMove0 to gsMove with index i
         B.AppEvent (ClientMove i dir) -> B.put (gsMove0 gs dir)
         B.AppEvent MonsterTick -> B.put (gsMoveMonsters gs)
         B.AppEvent QuitGame -> B.halt
         -- Other events and default
-        _ -> B.put gs
+        _ -> return ()
       Solved _ _ -> case event of
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
         B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
-        _ -> B.put gs
+        _ -> return ()
+      NewGame -> return () -- normally impossible
     NewGameDialog -> case event of
-      B.VtyEvent (V.EvKey V.KEnter []) -> liftIO (restartGame gs) >>= B.put . (gsGameMode . gmDialog .~ NoDialog)
-      B.VtyEvent (V.EvKey V.KEsc []) -> B.put (gs & gsGameMode . gmDialog .~ NoDialog)
+      B.VtyEvent (V.EvKey V.KEnter []) -> liftIO (restartGame gs) >>= B.put . (gsGameMode .~ GameMode InProgress NoDialog)
+      B.VtyEvent (V.EvKey V.KEsc []) -> case solvingState of
+        NewGame -> B.halt
+        _ -> B.put (gs & gsGameMode . gmDialog .~ NoDialog)
       B.AppEvent (Tick currentTime) -> return ()
       _ -> zoom gsNewGameForm (B.handleFormEvent event)
 
