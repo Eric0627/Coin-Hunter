@@ -13,6 +13,7 @@ import Data.Word
 import System.Random
 import qualified Data.Set as Set
 import Data.Maybe (catMaybes)
+import Test.QuickCheck hiding (shuffle)
 
 -- | Build a maze using the recursive backtracking algorithm.
 recursiveBacktracking :: RandomGen g => g -> Word32 -> Word32 -> (IMaze, g)
@@ -79,8 +80,8 @@ end = C 9 9
 hasPath :: IMaze -> Bool
 hasPath maze = dfs maze start end Set.empty
 
--- >>> prop_mazeHasPath_recursiveBacktracking 100
--- True
+-- >>> quickCheck prop_mazeHasPath_recursiveBacktracking
+-- +++ OK, passed 100 tests.
 --
 
 

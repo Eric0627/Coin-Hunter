@@ -16,6 +16,7 @@ import Data.UnionFind.ST
 import Data.Word
 import System.Random
 import Data.Maybe (catMaybes)
+import Test.QuickCheck hiding (shuffle)
 
 -- | Build a maze using Kruskal's algorithm.
 kruskal :: RandomGen g => g -> Word32 -> Word32 -> (IMaze, g)
@@ -83,8 +84,8 @@ end = C 9 9
 hasPath :: IMaze -> Bool
 hasPath maze = dfs maze start end Set.empty
 
--- >>> prop_mazeHasPath_kruskal 10
--- True
+-- >>> quickCheck prop_mazeHasPath_kruskal 
+-- +++ OK, passed 100 tests.
 --
 
 

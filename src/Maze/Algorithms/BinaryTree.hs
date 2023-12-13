@@ -1,5 +1,6 @@
 module Maze.Algorithms.BinaryTree
-  ( binaryTree
+  ( binaryTree,
+  prop_mazeHasPath_binaryTree,
   ) where
 
 import Maze.Core
@@ -12,6 +13,7 @@ import Data.Word
 import System.Random
 import qualified Data.Set as Set
 import Data.Maybe (catMaybes)
+import Test.QuickCheck
 
 -- | Build a maze using the "binary tree" algorithm. For each cell, randomly
 -- remove the wall above or to the left, but not both.
@@ -57,10 +59,9 @@ end = C 9 9
 hasPath :: IMaze -> Bool
 hasPath maze = dfs maze start end Set.empty
 
--- >>> prop_mazeHasPath_binaryTree 10
--- True
+-- >>> quickCheck prop_mazeHasPath_binaryTree
+-- +++ OK, passed 100 tests.
 --
-
 
 -- Property that asserts every generated maze has a path
 prop_mazeHasPath_binaryTree :: Int -> Bool
