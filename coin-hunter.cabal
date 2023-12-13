@@ -25,6 +25,7 @@ library
                       Maze.Algorithms.Kruskal
                       Maze.Algorithms.RecursiveBacktracking
                       Maze.Algorithms.Prim
+                      Maze.Algorithms.MyAlgorithm
                       Maze.Core
                       Maze.Utils
 

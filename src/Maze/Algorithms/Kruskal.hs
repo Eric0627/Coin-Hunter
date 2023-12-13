@@ -20,19 +20,20 @@ import System.Random
 kruskal :: RandomGen g => g -> Word32 -> Word32 -> (IMaze, g)
 kruskal g numRows numCols = runST $ do
   maze <- newSTMaze numRows numCols
-  walls <- stMazeInnerWalls maze
-  let (walls', g') = shuffle walls g
-  k <- newKruskal maze
-  forM_ walls' $ \e -> do
-    let (pos, pos') = wallNeighbors e
-    sameSet <- kruskalSameSet k pos pos'
-    case sameSet of
-      True -> return ()
-      False -> do
-        stMazeOpenWall maze e
-        kruskalUnion k pos pos'
+  -- walls <- stMazeInnerWalls maze
+  -- let (walls', g') = shuffle walls g
+  -- k <- newKruskal maze
+  -- forM_ walls' $ \e -> do
+  --   let (pos, pos') = wallNeighbors e
+  --   sameSet <- kruskalSameSet k pos pos'
+  --   case sameSet of
+  --     True -> return ()
+  --     False -> do
+  --       stMazeOpenWall maze e
+  --       kruskalUnion k pos pos'
   imaze <- freezeSTMaze maze
-  return (imaze, g')
+  -- return (imaze, g')
+  return (imaze, g)
 
 type Id = Word32
 

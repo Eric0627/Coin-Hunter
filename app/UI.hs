@@ -64,6 +64,7 @@ data Algorithm
   = RecursiveBacktracking
   | BinaryTree
   | Kruskal
+  | MyAlgorithm
   deriving (Show, Eq, Ord)
 
 data Size = Big | Small
@@ -169,8 +170,9 @@ gameState g numRows numCols alg size startTime currentTime =
       RecursiveBacktracking -> recursiveBacktracking g numRows numCols
       BinaryTree -> binaryTree g numRows numCols
       Kruskal -> kruskal g numRows numCols
+      MyAlgorithm -> myAlgorithm g numRows numCols
     (topLeft, _) = iMazeBounds maze
-    player = Player topLeft 0
+    player = Player (iMazeEntranceCoord maze)  0
     players = (player, player, player, player)
     (coinsPos, g2) = sample g1 10 (iCoinCoords maze)
     (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
@@ -231,91 +233,91 @@ drawMaze gs =
       : fmap (B.hBox . fmap (drawCell gs)) rows
   where
     (topRow : rows) = iMazeCoords (gs ^. gsMaze)
-    drawCell = case B.formState (gs ^. gsNewGameForm) ^. ngfSize of
-      Big -> drawCellBig
-      Small -> drawCellSmall
 
-drawCellSmall ::
-  GameState ->
-  -- | the cell to draw
-  Coord ->
-  B.Widget n
-drawCellSmall gs coord =
-  B.vBox
-    [ B.str tS,
-      B.hBox [B.str lS, B.withAttr attr (B.str [dC]), B.str [rC]]
-    ]
-  where
-    (row, col) = (coordRow coord, coordCol coord)
-    players = gs ^. gsPlayers
-    playerPos = players ^. _1 . pPos
-    maze = gs ^. gsMaze
-    (_, bottomRight) = iMazeBounds maze
-    dC = if isJust (iMazeMove maze coord DDown) then ' ' else '_'
-    rC = if isJust (iMazeMove maze coord DRight) then ' ' else '|'
-    lS = if col == 0 then "|" else ""
-    tS
-      | row /= 0 = ""
-      | col /= 0 = "_ \n"
-      | otherwise = " _ \n"
-    isFinish = coord == bottomRight
-    isSolved = playerPos == bottomRight
-    isPlayerPos = playerPos == coord
-    attr
-      | isPlayerPos = B.attrName (if isFinish then "solved" else "pos")
-      | isFinish = B.attrName "finish"
-      | otherwise = B.attrName "blank"
-
-drawCellBig :: GameState -> Coord -> B.Widget n
-drawCellBig gs coord =
-  B.vBox
-    [ B.str $ topLeftBorder ++ topBorder,
-      B.hBox
-        [ B.str leftBorder,
-          B.str " ",
-          B.withAttr attr $ B.str [m],
-          B.str " ",
-          B.str [r]
-        ],
-      B.hBox
-        [ B.str leftBorder,
-          B.str [d, d, d],
-          B.str [br]
-        ]
-    ]
+drawCell :: GameState -> Coord -> B.Widget n
+drawCell gs coord =
+  B.hBox
+    [ B.withAttr attr $ B.str m]
   where
     (row, col) = (coordRow coord, coordCol coord)
     playerPos = gs ^. gsPlayers . _1 . pPos
     coinsPos = gs ^. gsCoinsPos
     monstersPos = gs ^. gsMonstersPos
     maze = gs ^. gsMaze
+    cell = iMazeGetCell maze coord
     (topLeft, bottomRight) = iMazeBounds maze
     m
-      | coord == playerPos = '*'
-      | coord `elem` monstersPos = 'x'
-      | coord `elem` coinsPos = '$'
-      | otherwise = ' '
-    d = if isJust (iMazeMove maze coord DDown) then ' ' else '_'
-    r = if isJust (iMazeMove maze coord DRight) then ' ' else '|'
-    br = if isJust (iMazeMove maze coord DRight) then ' ' else '|'
-
-    leftBorder = if col == 0 then "|" else ""
-    topBorder = if row == 0 then "___ " else ""
-    topLeftBorder = if coord == topLeft then " " else ""
-
+      | coord == playerPos = "**"
+      | coord `elem` monstersPos = "xx"
+      | coord `elem` coinsPos = "$$"
+      | isWall cell = "  "
+      | otherwise = "  "
+    isBlocked = isWall cell
     isPlayerPos = coord == playerPos
     isStart = coord == topLeft
     isFinish = coord == bottomRight
     isCoin = coord `elem` coinsPos
     isMonster = coord `elem` monstersPos
-    attr = case (isStart, isFinish, isPlayerPos, isCoin, isMonster) of
-      (True, _, _, _, _) -> B.attrName "start"
-      (_, True, True, _, _) -> B.attrName "solved"
-      (_, True, False, _, _) -> B.attrName "finish"
-      (False, False, True, _, _) -> B.attrName "pos"
-      (False, False, False, True, False) -> B.attrName "coin"
-      (False, False, False, _, True) -> B.attrName "monster"
+    attr = case (isStart, isFinish, isPlayerPos, isCoin, isMonster, isBlocked) of
+      (True, _, _, _, _, False) -> B.attrName "start"
+      (_, True, True, _, _, False) -> B.attrName "solved"
+      (_, True, False, _, _, False) -> B.attrName "finish"
+      (False, False, True, _, _, False) -> B.attrName "pos"
+      (False, False, False, True, False, False) -> B.attrName "coin"
+      (False, False, False, _, True, False) -> B.attrName "monster"
+      (False, False, False, False, False, True) -> B.attrName "wall"
       _ -> B.attrName "blank"
+
+-- drawCellBig :: GameState -> Coord -> B.Widget n
+-- drawCellBig gs coord =
+--   B.vBox
+--     [ B.str $ topLeftBorder ++ topBorder,
+--       B.hBox
+--         [ B.str leftBorder,
+--           B.str " ",
+--           B.withAttr attr $ B.str [m],
+--           B.str " ",
+--           B.str [r]
+--         ],
+--       B.hBox
+--         [ B.str leftBorder,
+--           B.str [d, d, d],
+--           B.str [br]
+--         ]
+--     ]
+--   where
+--     (row, col) = (coordRow coord, coordCol coord)
+--     playerPos = gs ^. gsPlayers . _1 . pPos
+--     coinsPos = gs ^. gsCoinsPos
+--     monstersPos = gs ^. gsMonstersPos
+--     maze = gs ^. gsMaze
+--     (topLeft, bottomRight) = iMazeBounds maze
+--     m
+--       | coord == playerPos = '*'
+--       | coord `elem` monstersPos = 'x'
+--       | coord `elem` coinsPos = '$'
+--       | otherwise = ' '
+--     d = if isJust (iMazeMove maze coord DDown) then ' ' else '-'
+--     r = if isJust (iMazeMove maze coord DRight) then ' ' else '|'
+--     br = if isJust (iMazeMove maze coord DRight) then ' ' else '|'
+
+--     leftBorder = if col == 0 then "|" else ""
+--     topBorder = if row == 0 then "--- " else ""
+--     topLeftBorder = if coord == topLeft then " " else ""
+
+--     isPlayerPos = coord == playerPos
+--     isStart = coord == topLeft
+--     isFinish = coord == bottomRight
+--     isCoin = coord `elem` coinsPos
+--     isMonster = coord `elem` monstersPos
+--     attr = case (isStart, isFinish, isPlayerPos, isCoin, isMonster) of
+--       (True, _, _, _, _) -> B.attrName "start"
+--       (_, True, True, _, _) -> B.attrName "solved"
+--       (_, True, False, _, _) -> B.attrName "finish"
+--       (False, False, True, _, _) -> B.attrName "pos"
+--       (False, False, False, True, False) -> B.attrName "coin"
+--       (False, False, False, _, True) -> B.attrName "monster"
+--       _ -> B.attrName "blank"
 
 secondsElapsed :: GameState -> Int
 secondsElapsed gs =
@@ -401,14 +403,14 @@ handleEvent event = do
     NoDialog -> case gs ^. gsGameMode . gmSolvingState of
       InProgress -> case event of
         -- Handle key events for player movement
-        B.VtyEvent (V.EvKey V.KUp []) -> B.put (gsMove gs DUp)
-        B.VtyEvent (V.EvKey V.KDown []) -> B.put (gsMove gs DDown)
-        B.VtyEvent (V.EvKey V.KLeft []) -> B.put (gsMove gs DLeft)
-        B.VtyEvent (V.EvKey V.KRight []) -> B.put (gsMove gs DRight)
-        B.VtyEvent (V.EvKey (V.KChar 'w') []) -> B.put (gsMove gs DUp)
-        B.VtyEvent (V.EvKey (V.KChar 's') []) -> B.put (gsMove gs DDown)
-        B.VtyEvent (V.EvKey (V.KChar 'a') []) -> B.put (gsMove gs DLeft)
-        B.VtyEvent (V.EvKey (V.KChar 'd') []) -> B.put (gsMove gs DRight)
+        B.VtyEvent (V.EvKey V.KUp []) -> B.put (gsMove0 gs DUp)
+        B.VtyEvent (V.EvKey V.KDown []) -> B.put (gsMove0 gs DDown)
+        B.VtyEvent (V.EvKey V.KLeft []) -> B.put (gsMove0 gs DLeft)
+        B.VtyEvent (V.EvKey V.KRight []) -> B.put (gsMove0 gs DRight)
+        B.VtyEvent (V.EvKey (V.KChar 'w') []) -> B.put (gsMove0 gs DUp)
+        B.VtyEvent (V.EvKey (V.KChar 's') []) -> B.put (gsMove0 gs DDown)
+        B.VtyEvent (V.EvKey (V.KChar 'a') []) -> B.put (gsMove0 gs DLeft)
+        B.VtyEvent (V.EvKey (V.KChar 'd') []) -> B.put (gsMove0 gs DRight)
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
 
@@ -443,7 +445,7 @@ attrMap _ = B.attrMap V.defAttr
   , (B.attrName "pos", V.withForeColor V.defAttr V.blue)
   , (B.attrName "coin", V.withForeColor V.defAttr (V.rgbColor 255 215 0))
   , (B.attrName "monster", V.withForeColor V.defAttr V.red)
-  , (B.attrName "border", V.black `B.on` V.brightWhite)
+  , (B.attrName "wall", V.withBackColor V.defAttr V.cyan)
   , (B.formAttr, V.defAttr)
   , (B.editAttr, V.white `B.on` V.black)
   , (B.editFocusedAttr, V.black `B.on` V.yellow)

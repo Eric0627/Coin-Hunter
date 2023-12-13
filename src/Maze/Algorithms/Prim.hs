@@ -11,13 +11,13 @@ import qualified Data.PQueue.Min as PQ
 import Data.Word
 import System.Random
 
-data Entry = Entry Int Wall
+-- data Entry = Entry Int Wall
 
-instance Eq Entry where
-  Entry a _ == Entry b _ = a == b
+-- instance Eq Entry where
+--   Entry a _ == Entry b _ = a == b
 
-instance Ord Entry where
-  Entry a _ `compare` Entry b _ = a `compare` b
+-- instance Ord Entry where
+--   Entry a _ `compare` Entry b _ = a `compare` b
 
 -- | Build a maze using Prim's algorithm.
 prim :: RandomGen g => g -> Word32 -> Word32 -> (IMaze, g)
