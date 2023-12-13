@@ -343,6 +343,10 @@ handleEvent event = do
         B.VtyEvent (V.EvKey V.KDown []) -> B.put (gsMove gs DDown)
         B.VtyEvent (V.EvKey V.KLeft []) -> B.put (gsMove gs DLeft)
         B.VtyEvent (V.EvKey V.KRight []) -> B.put (gsMove gs DRight)
+        B.VtyEvent (V.EvKey (V.KChar 'w') []) -> B.put (gsMove gs DUp)
+        B.VtyEvent (V.EvKey (V.KChar 's') []) -> B.put (gsMove gs DDown)
+        B.VtyEvent (V.EvKey (V.KChar 'a') []) -> B.put (gsMove gs DLeft)
+        B.VtyEvent (V.EvKey (V.KChar 'd') []) -> B.put (gsMove gs DRight)
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) ->
               B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
@@ -383,6 +387,7 @@ attrMap _ = B.attrMap V.defAttr
   , (B.attrName "pos", V.withForeColor V.defAttr V.blue)
   , (B.attrName "coin", V.withForeColor V.defAttr (V.rgbColor 255 215 0))
   , (B.attrName "monster", V.withForeColor V.defAttr V.red)
+  , (B.attrName "border", V.black `B.on` V.brightWhite)
   , (B.formAttr, V.defAttr)
   , (B.editAttr, V.white `B.on` V.black)
   , (B.editFocusedAttr, V.black `B.on` V.yellow)
