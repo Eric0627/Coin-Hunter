@@ -1,6 +1,5 @@
 module Maze.Algorithms.BinaryTree
-  ( binaryTree,
-  prop_mazeHasPath_binaryTree,
+  ( binaryTree
   ) where
 
 import Maze.Core
