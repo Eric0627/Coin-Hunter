@@ -22,8 +22,8 @@ data Name = Message deriving (Eq, Ord, Show)
 
 data State = State {conn :: Connection, command :: Char}
 
-updateCommand' :: Char -> EventM n State ()
-updateCommand' c = do
+updateCommand :: Char -> EventM n State ()
+updateCommand c = do
   s@(State conn _) <- get
   put s {command = c}
   when (c `elem` ['w', 'a', 's', 'd', 'q']) (liftIO . sendTextData conn . pack $ [c])
@@ -40,17 +40,16 @@ drawUI (State _ 'd') = [showMessage "→"]
 drawUI _ = [showMessage "Press arrow or wasd keys to move, ESC to quit"]
 
 handleEvent :: BrickEvent n e -> EventM n State ()
-handleEvent (VtyEvent (EvKey KEsc [])) = halt
 handleEvent (VtyEvent (EvKey (KChar c) []))
-  | c `elem` ['w', 'a', 's', 'd', 'q'] = updateCommand' c
-  | otherwise = updateCommand' '?'
-handleEvent (VtyEvent (EvKey KUp [])) = updateCommand' 'w'
-handleEvent (VtyEvent (EvKey KLeft [])) = updateCommand' 'a'
-handleEvent (VtyEvent (EvKey KDown [])) = updateCommand' 's'
-handleEvent (VtyEvent (EvKey KRight [])) = updateCommand' 'd'
--- handleEvent (VtyEvent (EvKey (KChar 'q') [])) = updateCommand' 'q'
+  | c `elem` ['w', 'a', 's', 'd', 'q'] = updateCommand c
+  | otherwise = updateCommand '?'
+handleEvent (VtyEvent (EvKey KUp [])) = updateCommand 'w'
+handleEvent (VtyEvent (EvKey KLeft [])) = updateCommand 'a'
+handleEvent (VtyEvent (EvKey KDown [])) = updateCommand 's'
+handleEvent (VtyEvent (EvKey KRight [])) = updateCommand 'd'
+handleEvent (VtyEvent (EvKey KEsc [])) = halt
 
-handleEvent (VtyEvent (EvKey _ [])) = updateCommand' '?'
+handleEvent (VtyEvent (EvKey _ [])) = updateCommand '?'
 handleEvent ev = return ()
 
 app :: App State e Name
@@ -64,7 +63,7 @@ app =
     }
 
 client :: ClientApp ()
-client conn = void (defaultMain app (State conn '\0'))
+client conn = void (defaultMain app (State conn '?'))
 
 main :: IO ()
 main = do

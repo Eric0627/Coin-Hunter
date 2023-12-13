@@ -1,29 +1,22 @@
 module Main where
 
-import Control.Monad (forever)
-import Data.ByteString (ByteString)
-import Data.ByteString.Char8 (pack, unpack)
-import Maze.Core (Direction (..))
-import Network.WebSockets
-import System.Process (system)
-import Text.Parsec
-import Text.Parsec.ByteString (Parser)
-
 import Brick
 import Brick.BChan
 import Control.Concurrent
-import Control.Monad (forever, void)
-import Data.Time.Clock
-import Graphics.Vty
-import Graphics.Vty.Platform.Unix (mkVty)
-import System.Random
-import UI
-
 import Control.Concurrent.Async (async, wait)
-import Control.Concurrent.MVar
-import Data.Text
-import qualified Brick as B
-
+import Control.Monad (forever, void)
+import Data.ByteString (ByteString)
+import Data.ByteString.Char8 (pack, unpack)
+import Data.Time.Clock
+import Graphics.Vty (defaultConfig)
+import Graphics.Vty.Platform.Unix (mkVty)
+import Maze.Core (Direction (..))
+import Network.WebSockets
+import System.Process (system)
+import System.Random
+import Text.Parsec
+import Text.Parsec.ByteString (Parser)
+import UI
 
 type SharedGameState = MVar GameState
 
@@ -63,23 +56,20 @@ mazeGen eventChannel sharedState = do
   g <- getStdGen
   let initialGameState = gameState g 10 10 RecursiveBacktracking Big st st
   putMVar sharedState initialGameState
-  
 
   void $ customMain initialVty builder (Just eventChannel) mazeApp initialGameState
-
-
 
 data Command = Move Maze.Core.Direction | Quit deriving (Show, Eq)
 
 directionP :: Parser Maze.Core.Direction
 directionP =
-  (Text.Parsec.char 'w' >> return DUp)
-    Text.Parsec.<|> (Text.Parsec.char 's' >> return DDown)
-    Text.Parsec.<|> (Text.Parsec.char 'a' >> return DLeft)
-    Text.Parsec.<|> (Text.Parsec.char 'd' >> return DRight)
+  (char 'w' >> return DUp)
+    <|> (char 's' >> return DDown)
+    <|> (char 'a' >> return DLeft)
+    <|> (char 'd' >> return DRight)
 
 commandP :: Parser Command
-commandP = (Move <$> directionP) Text.Parsec.<|> (Text.Parsec.char 'q' >> return Quit)
+commandP = (Move <$> directionP) <|> (char 'q' >> return Quit)
 
 parseCommand :: ByteString -> Either ParseError Command
 parseCommand = runParser commandP () ""
@@ -99,22 +89,21 @@ type ServerState = [(String, Connection)]
 --         Left err -> putStrLn " (invalid)"
 --         Right Quit -> putStrLn " (quit)"
 --         -- handleEvent (VtyEvent (EvKey KUp []))
---         Right (Move DUp) -> do 
+--         Right (Move DUp) -> do
 --           writeBChan eventChannel (ClientMove DUp)
 --           putStrLn " (up)"
---         Right (Move DDown) -> do 
+--         Right (Move DDown) -> do
 --           writeBChan eventChannel (ClientMove DDown)
 --           putStrLn " (down)"
---         Right (Move DLeft) -> do 
+--         Right (Move DLeft) -> do
 --           writeBChan eventChannel (ClientMove DLeft)
 --           putStrLn " (left)"
---         Right (Move DRight) -> do 
+--         Right (Move DRight) -> do
 --           writeBChan eventChannel (ClientMove DRight)
 --           putStrLn " (right)"
 --       return ()
 
-
-server ::  BChan MazeEvent -> SharedGameState -> ServerApp
+server :: BChan MazeEvent -> SharedGameState -> ServerApp
 server eventChannel sharedState pending = do
   conn <- acceptRequest pending
   -- eventChannel <- newBChan 10
@@ -126,27 +115,23 @@ server eventChannel sharedState pending = do
       Left err -> putStrLn " (invalid command)"
       Right Quit -> do
         putStrLn " (quit)"
-        writeBChan eventChannel Q
-        -- sendClose conn (Data.ByteString.Char8.pack "Quit")
+        writeBChan eventChannel QuitGame
+      -- sendClose conn (Data.ByteString.Char8.pack "Quit")
       Right (Move dir) -> do
         -- putStrLn $ "Client sent move command: " ++ show dir
-        
-        writeBChan eventChannel (ClientMove dir)
-        
+        writeBChan eventChannel (ClientMove i dir)
+  where i = 1 -- TODO: assign player id from server state
 
 -- main :: IO ()
 -- main = do
 --   -- run maze and server in parallel
 --   let gs = Nothing
 
-  
-
 --   putStrLn "Generating maze..."
 --   _ <- async mazeGen
-  
+
 --   putStrLn "Starting server..."
 --   serverTask <- async $ runServer "localhost" 9160 server
-  
 
 --   wait serverTask
 
@@ -155,7 +140,7 @@ main = do
   sharedState <- newEmptyMVar
   eventChannel <- newBChan 10
   putStrLn "Generating maze..."
-  _ <- async $ mazeGen eventChannel sharedState
+  async $ mazeGen eventChannel sharedState
   putStrLn "Starting server..."
   serverTask <- async $ runServer "localhost" 9160 (server eventChannel sharedState)
   wait serverTask
