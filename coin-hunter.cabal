@@ -71,8 +71,7 @@ executable coin-hunter
         text,
         time,
         vty,
-        vty-unix,
-        QuickCheck
+        vty-unix
 
     ghc-options: -threaded
 
@@ -98,8 +97,7 @@ executable Server
                     text,
                     time,
                     vty,
-                    vty-unix,
-                    QuickCheck
+                    vty-unix
     hs-source-dirs:   app
     default-language: Haskell2010
     ghc-options: -threaded
