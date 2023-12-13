@@ -1,17 +1,14 @@
 module Main where
 
 import Brick
-import qualified Brick as B
 import Brick.BChan
 import Control.Concurrent
 import Control.Concurrent.Async (async, wait)
-import Control.Concurrent.MVar
 import Control.Monad (forever, void)
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (pack, unpack)
-import Data.Text
 import Data.Time.Clock
-import Graphics.Vty
+import Graphics.Vty (defaultConfig)
 import Graphics.Vty.Platform.Unix (mkVty)
 import Maze.Core (Direction (..))
 import Network.WebSockets
@@ -66,13 +63,13 @@ data Command = Move Maze.Core.Direction | Quit deriving (Show, Eq)
 
 directionP :: Parser Maze.Core.Direction
 directionP =
-  (Text.Parsec.char 'w' >> return DUp)
-    Text.Parsec.<|> (Text.Parsec.char 's' >> return DDown)
-    Text.Parsec.<|> (Text.Parsec.char 'a' >> return DLeft)
-    Text.Parsec.<|> (Text.Parsec.char 'd' >> return DRight)
+  (char 'w' >> return DUp)
+    <|> (char 's' >> return DDown)
+    <|> (char 'a' >> return DLeft)
+    <|> (char 'd' >> return DRight)
 
 commandP :: Parser Command
-commandP = (Move <$> directionP) Text.Parsec.<|> (Text.Parsec.char 'q' >> return Quit)
+commandP = (Move <$> directionP) <|> (char 'q' >> return Quit)
 
 parseCommand :: ByteString -> Either ParseError Command
 parseCommand = runParser commandP () ""
@@ -143,7 +140,7 @@ main = do
   sharedState <- newEmptyMVar
   eventChannel <- newBChan 10
   putStrLn "Generating maze..."
-  _ <- async $ mazeGen eventChannel sharedState
+  async $ mazeGen eventChannel sharedState
   putStrLn "Starting server..."
   serverTask <- async $ runServer "localhost" 9160 (server eventChannel sharedState)
   wait serverTask
