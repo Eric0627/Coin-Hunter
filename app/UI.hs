@@ -280,7 +280,7 @@ drawCellBig gs coord =
       B.hBox
         [ B.str leftBorder,
           B.str [d, d, d],
-          B.str [br]
+          B.str [r]
         ]
     ]
   where
@@ -297,7 +297,6 @@ drawCellBig gs coord =
       | otherwise = ' '
     d = if isJust (iMazeMove maze coord DDown) then ' ' else '_'
     r = if isJust (iMazeMove maze coord DRight) then ' ' else '|'
-    br = if isJust (iMazeMove maze coord DRight) then ' ' else '|'
 
     leftBorder = if col == 0 then "|" else ""
     topBorder = if row == 0 then "___ " else ""
@@ -325,7 +324,13 @@ secondsElapsed gs =
 
 status :: SolvingState -> Int -> Int -> B.Widget n
 status InProgress i j = B.str $ "Time: " ++ show i ++ "s" ++ " Coins: " ++ show j
-status (Solved i j) _ _ = B.str $ "Solved in " ++ show i ++ "s with " ++ show j ++ " coins! Nice job!"
+status (Solved i j) _ _ = B.str $ "Solved in " ++ show i ++ "s with " ++ show j ++ " coins." ++ " Your total score is " ++ show (getScore i j) ++ ". Nice job!"
+
+getScore :: Int -> Int -> Int
+getScore t c = if t <= 30 then c + 3
+              else if t <= 45 then c + 2
+              else if t <= 60 then c + 1
+              else c
 
 help :: B.Widget n
 help =
@@ -391,6 +396,12 @@ gsMoveMonsters gs = gs''
       | Just nPos <- iMazeMove (gs ^. gsMaze) c dir = nPos
       | otherwise = c
 
+gsMeetMonster :: GameState -> GameState
+gsMeetMonster gs = case (elem (gs ^. gsPlayers . _1 . pPos) (gs ^. gsMonstersPos)) of
+  True -> let (topLeft, _) = iMazeBounds (gs ^. gsMaze) in
+    gs & gsPlayers . _1 . pPos .~ topLeft
+  False -> gs
+
 gsMove0 :: GameState -> Direction -> GameState
 gsMove0 = gsMove 0
 
@@ -409,7 +420,8 @@ handleEvent event = do
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
 
         -- Handle custom events
-        B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
+        B.AppEvent (Tick currentTime) -> let gs' = gsMeetMonster gs
+                                          in B.put (gs' & gsCurrentTime .~ currentTime)
         -- TODO: change gsMove0 to gsMove with index i
         B.AppEvent (ClientMove i dir) -> B.put (gsMove0 gs dir)
         B.AppEvent MonsterTick -> B.put (gsMoveMonsters gs)
