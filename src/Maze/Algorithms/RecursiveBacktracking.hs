@@ -11,6 +11,9 @@ import Data.Array.ST
 import Data.STRef
 import Data.Word
 import System.Random
+import qualified Data.Set as Set
+import Data.Maybe (catMaybes)
+import Test.QuickCheck hiding (shuffle)
 
 -- | Build a maze using the recursive backtracking algorithm.
 recursiveBacktracking :: RandomGen g => g -> Word32 -> Word32 -> (IMaze, g)
@@ -51,3 +54,39 @@ recursiveBacktracking g rows cols = runST $ do
             when (not visited) $ do
               stMazeOpenCoordDir maze pos dir
               recursiveBacktracking' gRef maze nPos cellsVisited
+
+
+dfs :: IMaze -> Coord -> Coord -> Set.Set Coord -> Bool
+dfs maze currentCoord targetCoord visited
+  | currentCoord == targetCoord = True
+  | currentCoord `Set.member` visited = False
+  | otherwise =
+      let newVisited = Set.insert currentCoord visited
+          neighbors = filter (`Set.notMember` visited) $ adjacentCoords maze currentCoord
+      in any (\nextCoord -> dfs maze nextCoord targetCoord newVisited) neighbors
+
+-- Function to get adjacent coordinates in the maze
+adjacentCoords :: IMaze -> Coord -> [Coord]
+adjacentCoords maze coord =
+      let directions = [DUp, DDown, DLeft, DRight] -- All possible directions
+          moveResults = map (\dir -> iMazeMove maze coord dir) directions
+      in catMaybes moveResults
+
+start :: Coord
+start = getCoord 0 0
+end :: Coord
+end = getCoord 9 9
+
+hasPath :: IMaze -> Bool
+hasPath maze = dfs maze start end Set.empty
+
+-- >>> quickCheck prop_mazeHasPath_recursiveBacktracking
+-- +++ OK, passed 100 tests.
+--
+
+
+-- Property that asserts every generated maze has a path
+prop_mazeHasPath_recursiveBacktracking :: Int -> Bool
+prop_mazeHasPath_recursiveBacktracking seed =
+  let (maze, _) = recursiveBacktracking (mkStdGen seed) 10 10
+  in hasPath maze

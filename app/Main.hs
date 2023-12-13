@@ -26,5 +26,4 @@ main = do
     initialVty
     builder
     (Just eventChannel)
-    mazeApp
-    (gameState g maxRows maxCols MyAlgorithm Big st st)
+    mazeApp (initGameState maxRows maxCols 1 BinaryTree Big g st st)
