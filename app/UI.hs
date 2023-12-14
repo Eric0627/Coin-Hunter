@@ -24,13 +24,13 @@ import System.Random (StdGen, getStdGen)
 import Text.Read (readMaybe)
 
 maxRows :: Word32
-maxRows = 20
+maxRows = 30
 
 maxCols :: Word32
-maxCols = 40
+maxCols = 50
 
 maxPlayers :: Word32
-maxPlayers = 10
+maxPlayers = 4
 
 data Name
   = NGFNumRows
