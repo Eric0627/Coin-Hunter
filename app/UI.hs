@@ -434,7 +434,7 @@ gsMoveMonsters gs = gs''
 gsMeetMonster :: GameState -> GameState
 gsMeetMonster gs
   | (gs ^. gsPlayers . _1 . pPos) `elem` (gs ^. gsMonstersPos) =
-      gs & gsPlayers . _1 . pPos .~ snd (iMazeBounds (gs ^. gsMaze))
+      gs & gsPlayers . _1 . pPos .~ fst (iMazeBounds (gs ^. gsMaze))
   | otherwise = gs
 
 gsMove0 :: GameState -> Direction -> GameState
