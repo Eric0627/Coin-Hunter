@@ -10,8 +10,9 @@ import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as B
 import qualified Brick.Widgets.Edit as B
 import Control.Monad (unless, (<=<))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Functor.Identity (Identity)
-import Data.List (delete)
+import Data.List (delete, elemIndex)
 import Data.Maybe (isJust)
 import qualified Data.Text as T
 import Data.Time.Clock
@@ -28,9 +29,13 @@ maxRows = 20
 maxCols :: Word32
 maxCols = 40
 
+maxPlayers :: Word32
+maxPlayers = 10
+
 data Name
   = NGFNumRows
   | NGFNumCols
+  | NGFNPlayers
   | NGFRecursiveBacktracking
   | NGFBinaryTree
   | NGFKruskal
@@ -52,6 +57,7 @@ data Dialog
 data SolvingState
   = InProgress
   | Solved Int Int
+  | NewGame
 
 data GameMode = GameMode
   { _gmSolvingState :: SolvingState,
@@ -72,6 +78,7 @@ data Size = Big | Small
 data NewGameFormState = NewGameFormState
   { _ngfNumRows :: Word32,
     _ngfNumCols :: Word32,
+    _ngfNPlayers :: Word32,
     _ngfAlgorithm :: Algorithm,
     _ngfSize :: Size
   }
@@ -81,9 +88,11 @@ makeLenses ''NewGameFormState
 newGameForm :: NewGameFormState -> B.Form NewGameFormState e Name
 newGameForm =
   B.newForm
-    [ B.padBottom (B.Pad 1) . label ("# rows (<=" ++ show maxRows ++ "): ")
+    [ B.padBottom (B.Pad 1) . label "# players: "
+        B.@@= B.editShowableFieldWithValidate ngfNPlayers NGFNPlayers validN,
+      B.padBottom (B.Pad 1) . label ("# rows (3-" ++ show maxRows ++ "): ")
         B.@@= B.editShowableFieldWithValidate ngfNumRows NGFNumRows validRow,
-      B.padBottom (B.Pad 1) . label ("# cols (<=" ++ show maxCols ++ "): ")
+      B.padBottom (B.Pad 1) . label ("# cols (3-" ++ show maxCols ++ "): ")
         B.@@= B.editShowableFieldWithValidate ngfNumCols NGFNumCols validCol,
       B.padBottom (B.Pad 1) . label "algorithm: "
         B.@@= B.radioField
@@ -101,8 +110,9 @@ newGameForm =
     ]
   where
     label s w = B.vLimit 1 (B.hLimit 15 $ B.str s B.<+> B.fill ' ') B.<+> w
-    validRow r = 1 <= r && r <= maxRows
-    validCol c = 1 <= c && c <= maxCols
+    validN n = 1 <= n && n <= maxPlayers
+    validRow r = 3 <= r && r <= maxRows
+    validCol c = 3 <= c && c <= maxCols
 
 -- | This will be merged into @brick@, so we can remove it at some point
 editShowableFieldWithValidate ::
@@ -125,12 +135,13 @@ editShowableFieldWithValidate stLens n validate = B.editField stLens n limit ini
 
 data Player = Player
   { _pPos :: Coord,
-    _pCoins :: Int
+    _pCoins :: Int,
+    _pSolved :: Bool
   }
 
 makeLenses ''Player
 
-type Players = (Player, Player, Player, Player)
+type Players = [Player]
 
 data GameState = GameState
   { _gsMaze :: IMaze,
@@ -150,48 +161,47 @@ data GameState = GameState
 
 makeLenses ''GameState
 
-gameState ::
-  StdGen ->
+initGameState ::
+  Word32 ->
   Word32 ->
   Word32 ->
   Algorithm ->
   Size ->
+  StdGen ->
   UTCTime ->
   UTCTime ->
   GameState
-gameState _ numRows numCols _ _ _ _
-  | numRows <= 0 = error "PANIC: gameState called with non-positive number of rows"
-  | numCols <= 0 = error "PANIC: gameState called with non-positive number of columns"
-gameState g numRows numCols alg size startTime currentTime =
-  GameState maze players coinsPos monstersPos g3 ngf (GameMode InProgress NoDialog) startTime currentTime
+initGameState numRows numCols n alg size g = GameState maze players coinsPos monstersPos g3 ngf (GameMode NewGame NewGameDialog)
   where
     (maze, g1) = case alg of
       RecursiveBacktracking -> recursiveBacktracking g numRows numCols
       BinaryTree -> binaryTree g numRows numCols
       Kruskal -> kruskal g numRows numCols
     (topLeft, _) = iMazeBounds maze
-    player = Player topLeft 0
-    players = (player, player, player, player)
     (coinsPos, g2) = sample g1 10 (iCoinCoords maze)
     (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
-    ngf = newGameForm (NewGameFormState numRows numCols alg size)
+    players = replicate (fromIntegral n) (Player topLeft 0 False)
+    ngf = newGameForm (NewGameFormState numRows numCols (fromIntegral n) alg size)
 
-gsNewGame :: GameState -> GameState
-gsNewGame gs = gameState g numRows numCols alg size st ct
+restartGame :: GameState -> IO GameState
+restartGame gs = do
+  st <- getCurrentTime
+
+  return $ initGameState numRows numCols (fromIntegral n) alg size g st st
   where
     g = gs ^. gsGen -- (^.) get gsGen in gs
-    numRows = B.formState (gs ^. gsNewGameForm) ^. ngfNumRows
-    numCols = B.formState (gs ^. gsNewGameForm) ^. ngfNumCols
-    alg = B.formState (gs ^. gsNewGameForm) ^. ngfAlgorithm
-    size = B.formState (gs ^. gsNewGameForm) ^. ngfSize
-    st = gs ^. gsCurrentTime
-    ct = gs ^. gsCurrentTime
+    gf = B.formState $ gs ^. gsNewGameForm
+    alg = gf ^. ngfAlgorithm
+    size = gf ^. ngfSize
+    numRows = gf ^. ngfNumRows
+    numCols = gf ^. ngfNumCols
+    n = gf ^. ngfNPlayers
 
 mazeApp :: B.App GameState MazeEvent Name
 mazeApp =
   B.App
     { B.appDraw = draw,
-      B.appChooseCursor = \_ _ -> Nothing,
+      B.appChooseCursor = B.showFirstCursor,
       B.appHandleEvent = handleEvent,
       B.appStartEvent = return (),
       B.appAttrMap = attrMap
@@ -219,10 +229,13 @@ drawMain gs =
       B.center $
         B.vBox
           [ B.hCenter $ drawMaze gs,
-            B.hCenter $ status (gs ^. (gsGameMode . gmSolvingState)) (secondsElapsed gs) (gs ^. gsPlayers . _1 . pCoins)
+            B.hCenter $ status state (secondsElapsed gs) coins0
           ],
       B.vLimit 3 $ B.center help
     ]
+  where
+    state = gs ^. gsGameMode . gmSolvingState
+    coins0 = gs ^. gsPlayers . to head . pCoins
 
 drawMaze :: GameState -> B.Widget n
 drawMaze gs =
@@ -248,21 +261,20 @@ drawCellSmall gs coord =
   where
     (row, col) = (coordRow coord, coordCol coord)
     players = gs ^. gsPlayers
-    playerPos = players ^. _1 . pPos
+    playerPos0 = players ^. to head . pPos
     maze = gs ^. gsMaze
     (_, bottomRight) = iMazeBounds maze
-    dC = if isJust (iMazeMove maze coord DDown) then ' ' else '_'
-    rC = if isJust (iMazeMove maze coord DRight) then ' ' else '|'
-    lS = if col == 0 then "|" else ""
+    dC = if isJust (iMazeMove maze coord DDown) then ' ' else '─'
+    rC = if isJust (iMazeMove maze coord DRight) then ' ' else '│'
+    lS = if col == 0 then "│" else ""
     tS
       | row /= 0 = ""
-      | col /= 0 = "_ \n"
-      | otherwise = " _ \n"
+      | col /= 0 = "─ \n"
+      | otherwise = " ─ \n"
+    isPlayerPos0 = playerPos0 == coord
     isFinish = coord == bottomRight
-    isSolved = playerPos == bottomRight
-    isPlayerPos = playerPos == coord
     attr
-      | isPlayerPos = B.attrName (if isFinish then "solved" else "pos")
+      | isPlayerPos0 = B.attrName (if isFinish then "solved" else "pos")
       | isFinish = B.attrName "finish"
       | otherwise = B.attrName "blank"
 
@@ -287,7 +299,7 @@ drawCellBig gs coord =
     ]
   where
     (row, col) = (coordRow coord, coordCol coord)
-    playerPos = gs ^. gsPlayers . _1 . pPos
+    playerPos0 = gs ^. gsPlayers . to head . pPos
     coinsPos = gs ^. gsCoinsPos
     monstersPos = gs ^. gsMonstersPos
     maze = gs ^. gsMaze
@@ -298,9 +310,13 @@ drawCellBig gs coord =
 
     mLeftBorder = if col == 0 then "│" else ""
     m
-      | coord == playerPos = " ⛑ "
-      | coord `elem` monstersPos = " ⚉ "
-      | coord `elem` coinsPos = " ◉ "
+      | isMonster = " \986057 " -- 👾
+      -- \| isMonster = " \983712 " -- 👻
+      -- \| isMonster = " ⚉ "
+      | isPlayerPos = " \986216 " -- 😀
+      -- \| isPlayerPos = " ⛑ "
+      | isCoin = " ◉ "
+      | isFinish = " ⚐ "
       | otherwise = "   "
 
     isDownClear = isJust (iMazeMove maze coord DDown)
@@ -337,19 +353,17 @@ drawCellBig gs coord =
       (_, _, _, False) -> "╶"
       _ -> " "
 
-    isPlayerPos = coord == playerPos
+    isPlayerPos = coord == playerPos0
     isStart = coord == topLeft
     isFinish = coord == bottomRight
     isCoin = coord `elem` coinsPos
     isMonster = coord `elem` monstersPos
-    attr = case (isStart, isFinish, isPlayerPos, isCoin, isMonster) of
-      (True, _, _, _, _) -> B.attrName "start"
-      (_, True, True, _, _) -> B.attrName "solved"
-      (_, True, False, _, _) -> B.attrName "finish"
-      (False, False, True, _, _) -> B.attrName "pos"
-      (False, False, False, True, False) -> B.attrName "coin"
-      (False, False, False, _, True) -> B.attrName "monster"
-      _ -> B.attrName "blank"
+    attr
+      | isFinish = B.attrName "finish"
+      | isMonster = B.attrName "monster"
+      | isPlayerPos = B.attrName "pos"
+      | isCoin = B.attrName "coin"
+      | otherwise = B.attrName "blank"
 
 secondsElapsed :: GameState -> Int
 secondsElapsed gs =
@@ -373,7 +387,7 @@ help =
   B.hBox
     [ B.padLeftRight 1 $
         B.vBox
-          [ B.str "up/down/left/right",
+          [ B.str "↑←↓→/wasd",
             B.str "n",
             B.str "q"
           ],
@@ -386,56 +400,51 @@ help =
     ]
 
 isSolved :: GameState -> Bool
-isSolved gs = (gs ^. gsPlayers . _1 . pPos) == snd (iMazeBounds $ gs ^. gsMaze)
-
--- isSolved _ = False -- for now
-
-_i :: Int -> Lens' Players Player
-_i 0 = _1
-_i 1 = _2
-_i 2 = _3
-_i 3 = _4
-_i _ = undefined
+isSolved gs = all (^. pSolved) (gs ^. gsPlayers)
 
 gsMove :: Int -> GameState -> Direction -> GameState
 gsMove i gs dir = case nPos of
   Just nPos -> gs''
     where
-      gs' = gsGetCoin' i (gs & gsPlayers .~ (players & _i i .~ (p & pPos .~ nPos)))
-      gs'' = gs' & gsGameMode . gmSolvingState .~ (if isSolved gs' then Solved (secondsElapsed gs) coins else InProgress)
+      goal = snd (iMazeBounds $ gs ^. gsMaze)
+      gs' = gsGetCoin i (gs & gsPlayers . ix i .~ p {_pPos = nPos, _pSolved = nPos == goal})
+      coins = p ^. pCoins
+      gs''
+        | isSolved gs' = gs' & gsGameMode . gmSolvingState .~ Solved (secondsElapsed gs) coins
+        | nPos `elem` gs ^. gsMonstersPos = gs & gsPlayers . ix i . pPos .~ fst (iMazeBounds (gs ^. gsMaze))
+        | otherwise = gs'
   Nothing -> gs
   where
     players = gs ^. gsPlayers
-    p = players ^. _i i
+    p = players ^. to (!! i)
     nPos = iMazeMove (gs ^. gsMaze) (p ^. pPos) dir
-    coins = p ^. pCoins
 
-gsGetCoin' :: Int -> GameState -> GameState
-gsGetCoin' i gs = case (p ^. pPos) `elem` (gs ^. gsCoinsPos) of
-  True -> gs''
-    where
-      gs' = gs & gsPlayers .~ (players & (_i i .~ (p & pCoins +~ 1)))
-      gs'' = gs' & gsCoinsPos .~ ((p ^. pPos) `delete` (gs' ^. gsCoinsPos))
-  False -> gs
+gsGetCoin :: Int -> GameState -> GameState
+gsGetCoin i gs =
+  if (p ^. pPos) `elem` (gs ^. gsCoinsPos)
+    then gs {_gsPlayers = players & ix i . pCoins +~ 1, _gsCoinsPos = (p ^. pPos) `delete` (gs ^. gsCoinsPos)}
+    else gs
   where
-    p = gs ^. gsPlayers . _i i
     players = gs ^. gsPlayers
+    p = players !! i
 
 gsMoveMonsters :: GameState -> GameState
-gsMoveMonsters gs = gs''
+gsMoveMonsters gs = gs'
   where
     (dirs, newGen) = sample (gs ^. gsGen) 5 [DDown, DUp, DLeft, DRight]
-    gs' = gs & gsGen .~ newGen
-    gs'' = gs' & gsMonstersPos .~ zipWith moveMonster dirs (gs' ^. gsMonstersPos)
-    moveMonster dir c
-      | Just nPos <- iMazeMove (gs ^. gsMaze) c dir = nPos
-      | otherwise = c
+    gs' = gs {_gsGen = newGen, _gsMonstersPos = zipWith moveMonster dirs (gs ^. gsMonstersPos)}
+    players = gs ^. gsPlayers
+    moveMonster dir oPos = case iMazeMove (gs ^. gsMaze) oPos dir of
+      Just nPos
+        | nPos `elem` map _pPos players -> oPos
+        | otherwise -> nPos
+      Nothing -> oPos
 
 gsMeetMonster :: GameState -> GameState
-gsMeetMonster gs
-  | (gs ^. gsPlayers . _1 . pPos) `elem` (gs ^. gsMonstersPos) =
-      gs & gsPlayers . _1 . pPos .~ fst (iMazeBounds (gs ^. gsMaze))
-  | otherwise = gs
+gsMeetMonster gs = gs & gsPlayers .~ playerT `map` (gs ^. gsPlayers)
+  where
+    topLeft = fst (iMazeBounds (gs ^. gsMaze))
+    playerT p = if (p ^. pPos) `elem` gs ^. gsMonstersPos then p & pPos .~ topLeft else p
 
 gsMove0 :: GameState -> Direction -> GameState
 gsMove0 = gsMove 0
@@ -443,48 +452,53 @@ gsMove0 = gsMove 0
 handleEvent :: B.BrickEvent Name MazeEvent -> B.EventM Name GameState ()
 handleEvent event = do
   gs <- B.get
-  case gs ^. (gsGameMode . gmDialog) of
-    NoDialog -> case gs ^. gsGameMode . gmSolvingState of
+  let mode = gs ^. gsGameMode
+      solvingState = mode ^. gmSolvingState
+  case mode ^. gmDialog of
+    NoDialog -> case solvingState of
       InProgress -> case event of
         -- Handle key events for player movement
-        B.VtyEvent (V.EvKey V.KUp []) -> B.put (gsMove0 gs DUp)
-        B.VtyEvent (V.EvKey V.KDown []) -> B.put (gsMove0 gs DDown)
-        B.VtyEvent (V.EvKey V.KLeft []) -> B.put (gsMove0 gs DLeft)
-        B.VtyEvent (V.EvKey V.KRight []) -> B.put (gsMove0 gs DRight)
+        B.VtyEvent (V.EvKey V.KUp []) -> B.put $ gsMove0 gs DUp
+        B.VtyEvent (V.EvKey V.KLeft []) -> B.put $ gsMove0 gs DLeft
+        B.VtyEvent (V.EvKey V.KDown []) -> B.put $ gsMove0 gs DDown
+        B.VtyEvent (V.EvKey V.KRight []) -> B.put $ gsMove0 gs DRight
+        B.VtyEvent (V.EvKey (V.KChar 'w') []) -> B.put $ gsMove0 gs DUp
+        B.VtyEvent (V.EvKey (V.KChar 'a') []) -> B.put $ gsMove0 gs DLeft
+        B.VtyEvent (V.EvKey (V.KChar 's') []) -> B.put $ gsMove0 gs DDown
+        B.VtyEvent (V.EvKey (V.KChar 'd') []) -> B.put $ gsMove0 gs DRight
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
-        B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
+        B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put $ gs & gsGameMode . gmDialog .~ NewGameDialog
         -- Handle custom events
-        B.AppEvent (Tick currentTime) -> B.put (gsMeetMonster gs & gsCurrentTime .~ currentTime)
-        -- TODO: change gsMove0 to gsMove with index i
-        B.AppEvent (ClientMove i dir) -> B.put (gsMove0 gs dir)
-        B.AppEvent MonsterTick -> B.put (gsMoveMonsters gs)
+        B.AppEvent (Tick currentTime) -> B.put $ gsMeetMonster gs & gsCurrentTime .~ currentTime
+        B.AppEvent (ClientMove i dir) -> B.put $ gsMove0 gs dir
+        B.AppEvent MonsterTick -> B.put $ gsMoveMonsters gs
         B.AppEvent QuitGame -> B.halt
         -- Other events and default
-        _ -> B.put gs
+        _ -> return ()
       Solved _ _ -> case event of
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
-        B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
-        B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
-        _ -> B.put gs
+        B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put $ gs & gsGameMode . gmDialog .~ NewGameDialog
+        B.AppEvent (Tick currentTime) -> B.put $ gs & gsCurrentTime .~ currentTime
+        _ -> return ()
+      NewGame -> return () -- normally impossible
     NewGameDialog -> case event of
-      B.VtyEvent (V.EvKey V.KEnter []) ->
-        B.put (gsNewGame gs)
-      B.VtyEvent (V.EvKey V.KEsc []) ->
-        B.put (gs & gsGameMode . gmDialog .~ NoDialog)
-      B.AppEvent (Tick currentTime) -> B.put (gs & gsCurrentTime .~ currentTime)
-      _ -> B.put gs
+      B.VtyEvent (V.EvKey V.KEnter []) -> liftIO (restartGame gs) >>= B.put . (gsGameMode .~ GameMode InProgress NoDialog)
+      B.VtyEvent (V.EvKey V.KEsc []) -> case solvingState of
+        NewGame -> B.halt
+        _ -> B.put $ gs & gsGameMode . gmDialog .~ NoDialog
+      B.AppEvent (Tick currentTime) -> return ()
+      _ -> zoom gsNewGameForm (B.handleFormEvent event)
 
 attrMap :: GameState -> B.AttrMap
 attrMap _ =
   B.attrMap
     V.defAttr
-    [ (B.attrName "start", V.withForeColor V.defAttr V.blue),
-      (B.attrName "finish", V.withBackColor V.defAttr V.red),
-      (B.attrName "solved", V.withBackColor V.defAttr V.green),
-      (B.attrName "blank", V.defAttr),
+    [ (B.attrName "finish", V.withForeColor V.defAttr V.green),
+      -- (B.attrName "solved", V.withBackColor V.defAttr V.green),
+      (B.attrName "monster", V.withForeColor V.defAttr V.red),
       (B.attrName "pos", V.withForeColor V.defAttr V.blue),
       (B.attrName "coin", V.withForeColor V.defAttr (V.rgbColor 255 215 0)),
-      (B.attrName "monster", V.withForeColor V.defAttr V.red),
+      (B.attrName "blank", V.defAttr),
       (B.formAttr, V.defAttr),
       (B.editAttr, V.white `B.on` V.black),
       (B.editFocusedAttr, V.black `B.on` V.yellow),
