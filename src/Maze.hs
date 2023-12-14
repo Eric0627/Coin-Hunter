@@ -6,6 +6,7 @@ module Maze
   , iMazeCoords
   , sample
   , iCoinCoords
+  , neighborCoord
   , Coord
   , coordRow
   , coordCol

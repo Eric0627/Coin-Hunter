@@ -30,6 +30,7 @@ module Maze.Core
   , iMazeCoords
   , sample
   , iCoinCoords
+  , neighborCoord
   ) where
 
 import Control.Monad (filterM, when)

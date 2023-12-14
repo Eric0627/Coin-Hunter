@@ -269,18 +269,20 @@ drawCellSmall gs coord =
 drawCellBig :: GameState -> Coord -> B.Widget n
 drawCellBig gs coord =
   B.vBox
-    [ B.str $ topLeftBorder ++ topBorder,
-      B.hBox
-        [ B.str leftBorder,
-          B.str " ",
-          B.withAttr attr $ B.str [m],
-          B.str " ",
-          B.str [r]
+    [ B.hBox
+        [ B.str tLeftBorder,
+          B.str tCenterBorder, 
+          B.str tRigthBorder
         ],
       B.hBox
-        [ B.str leftBorder,
-          B.str [d, d, d],
-          B.str [r]
+        [ B.str mLeftBorder,
+          B.withAttr attr $ B.str m,
+          B.str mRightBorder
+        ],
+      B.hBox
+        [ B.str bLeftBorder,
+          B.str bCenterBorder,
+          B.str bRightBorder
         ]
     ]
   where
@@ -290,17 +292,46 @@ drawCellBig gs coord =
     monstersPos = gs ^. gsMonstersPos
     maze = gs ^. gsMaze
     (topLeft, bottomRight) = iMazeBounds maze
+    tLeftBorder = if coord == topLeft then "\9484" else ""
+    tCenterBorder = if row == 0 then "\9472\9472\9472" else ""
+    tRigthBorder = if row == 0 then (if col == 9 then "\9488" else "\9472") else ""
+    
+    mLeftBorder = if col == 0 then "\9474" else ""
     m
-      | coord == playerPos = '*'
-      | coord `elem` monstersPos = 'x'
-      | coord `elem` coinsPos = '$'
-      | otherwise = ' '
-    d = if isJust (iMazeMove maze coord DDown) then ' ' else '_'
-    r = if isJust (iMazeMove maze coord DRight) then ' ' else '|'
+      | coord == playerPos = " \9937 "
+      | coord `elem` monstersPos = " \9865 "
+      | coord `elem` coinsPos = " \9673 "
+      | otherwise = "   "
+    
+    isDownClear = isJust (iMazeMove maze coord DDown)
+    isRightClear = isJust (iMazeMove maze coord DRight)
 
-    leftBorder = if col == 0 then "|" else ""
-    topBorder = if row == 0 then "___ " else ""
-    topLeftBorder = if coord == topLeft then " " else ""
+    mRightBorder = if isRightClear then " " else "\9474"
+
+    bLeftBorder = if col == 0 then (if row == 9 then "\9492" else "\9474") else ""
+    bCenterBorder = if isDownClear then "   " else "\9472\9472\9472" 
+
+    downCoord = neighborCoord DDown coord
+    rightCoord = neighborCoord DRight coord
+    isDwonRightClear = isJust (iMazeMove maze downCoord DRight)
+    isRightDownClear = isJust (iMazeMove maze rightCoord DDown)
+
+    bRightBorder = case (isDownClear, isRightClear, isDwonRightClear, isRightDownClear) of
+       (True, True, True, True) -> " "
+       (False, True, True, True) -> "\9472"
+       (False, False, True, True) -> "\9496"
+       (False, True, False, True) -> "\9488"
+       (False, True, True, False) -> "\9472"
+       (False, False, False, True) -> "\9508"
+       (False, False, True, False) -> "\9524"
+       (False, False, False, False) -> if (row == 9 && col == 9) then "\9496" else 
+                                          (if col == 9 then "\9508" else 
+                                            (if row == 9 then "\9524"  else "\9532"))
+       (True, False, _, True) -> "\9474"
+       (True, False, True, False) -> "\9492"
+       (True, False, False, False) -> if col == 9 then "\9474" else "\9500"
+       (False, True, False, False) -> "\9472"
+       otherwise -> " "
 
     isPlayerPos = coord == playerPos
     isStart = coord == topLeft
