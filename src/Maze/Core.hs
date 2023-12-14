@@ -8,6 +8,8 @@
 module Maze.Core
   ( -- * Coordinates, directions, and walls
     Coord,
+    maxRows,
+    maxCols,
     coordRow,
     coordCol,
     getRow,

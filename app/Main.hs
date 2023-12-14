@@ -9,6 +9,7 @@ import Graphics.Vty
 import Graphics.Vty.Platform.Unix (mkVty)
 import System.Random
 import UI
+import Maze (maxRows, maxCols)
 
 main :: IO ()
 main = do

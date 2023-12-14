@@ -23,12 +23,6 @@ import Maze
 import System.Random (StdGen, getStdGen)
 import Text.Read (readMaybe)
 
-maxRows :: Word32
-maxRows = 30
-
-maxCols :: Word32
-maxCols = 50
-
 maxPlayers :: Word32
 maxPlayers = 4
 

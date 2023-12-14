@@ -9,6 +9,8 @@ module Maze
   , sample
   , iBlankCoords
   , Coord
+  , maxRows
+  , maxCols
   , coordRow
   , coordCol
   , getRow
