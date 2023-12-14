@@ -32,6 +32,12 @@ maxCols = 50
 maxPlayers :: Word32
 maxPlayers = 4
 
+numCoins :: Int
+numCoins = 30
+
+numMonsters :: Int
+numMonsters = 30
+
 data Name
   = NGFNumRows
   | NGFNumCols
@@ -170,8 +176,8 @@ initGameState numRows numCols n alg size g = GameState maze players coinsPos mon
     (maze, g1) = case alg of
       RandomGeneration -> randomGeneration g numRows numCols
     (topLeft, _) = iMazeBounds maze
-    (coinsPos, g2) = sample g1 30 (iBlankCoords maze)
-    (monstersPos, g3) = sample g2 15 (iBlankCoords maze)
+    (coinsPos, g2) = sample g1 numCoins (iBlankCoords maze)
+    (monstersPos, g3) = sample g2 numMonsters (iBlankCoords maze)
     players = replicate (fromIntegral n) (Player (iMazeEntranceCoord maze) 0 False)
     ngf = newGameForm (NewGameFormState numRows numCols (fromIntegral n) alg size)
 
@@ -330,7 +336,7 @@ gsGetCoin i gs = case (p ^. pPos) `elem` (gs ^. gsCoinsPos) of
 gsMoveMonsters :: GameState -> GameState
 gsMoveMonsters gs = gs''
   where
-    (dirs, newGen) = sample (gs ^. gsGen) 15 [DDown, DUp, DLeft, DRight]
+    (dirs, newGen) = sample (gs ^. gsGen) numMonsters [DDown, DUp, DLeft, DRight]
     gs' = gs & gsGen .~ newGen
     gs'' = gs' & gsMonstersPos .~ zipWith moveMonster dirs (gs' ^. gsMonstersPos)
     moveMonster dir c
