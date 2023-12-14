@@ -7,24 +7,19 @@ module Maze
   , iMazeGetCell
   , iMazeEntranceCoord
   , sample
-  , iCoinCoords
+  , iBlankCoords
   , Coord
   , coordRow
   , coordCol
   , getRow
   , getCol
-  , getCoord
+  , newCoord
   , Cell
   , isWall
   , Direction(..)
     -- * Maze construction algorithms
-  , recursiveBacktracking
-  , binaryTree
-  , kruskal
-  , myAlgorithm
+  , randomGeneration
   ) where
 
 import Maze.Core
 import Maze.Algorithms
-import Maze.Algorithms.MyAlgorithm
-

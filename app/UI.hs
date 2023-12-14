@@ -36,11 +36,8 @@ data Name
   = NGFNumRows
   | NGFNumCols
   | NGFNPlayers
-  | NGFRecursiveBacktracking
-  | NGFBinaryTree
-  | NGFKruskal
-  | NGFBig
-  | NGFSmall
+  | NGFRandomGeneration
+  | NGFNormal
   deriving (Show, Eq, Ord)
 
 -- | The only additional event we use is a timer event from the outside world
@@ -67,13 +64,10 @@ data GameMode = GameMode
 makeLenses ''GameMode
 
 data Algorithm
-  = RecursiveBacktracking
-  | BinaryTree
-  | Kruskal
-  | MyAlgorithm
+  = RandomGeneration
   deriving (Show, Eq, Ord)
 
-data Size = Big | Small
+data Size = Normal
   deriving (Show, Eq, Ord)
 
 data NewGameFormState = NewGameFormState
@@ -98,15 +92,12 @@ newGameForm =
       B.padBottom (B.Pad 1) . label "algorithm: "
         B.@@= B.radioField
           ngfAlgorithm
-          [ (RecursiveBacktracking, NGFRecursiveBacktracking, "recursive backtracking"),
-            (BinaryTree, NGFBinaryTree, "binary tree"),
-            (Kruskal, NGFKruskal, "kruskal's algorithm")
+          [ (RandomGeneration, NGFRandomGeneration, "random generation")
           ],
       label "size: "
         B.@@= B.radioField
           ngfSize
-          [ (Big, NGFBig, "big"),
-            (Small, NGFSmall, "small")
+          [ (Normal, NGFNormal, "normal")
           ]
     ]
   where
@@ -177,13 +168,10 @@ initGameState ::
 initGameState numRows numCols n alg size g = GameState maze players coinsPos monstersPos g3 ngf (GameMode NewGame NewGameDialog)
   where
     (maze, g1) = case alg of
-      RecursiveBacktracking -> recursiveBacktracking g numRows numCols
-      BinaryTree -> binaryTree g numRows numCols
-      Kruskal -> kruskal g numRows numCols
-      MyAlgorithm -> myAlgorithm g numRows numCols
+      RandomGeneration -> randomGeneration g numRows numCols
     (topLeft, _) = iMazeBounds maze
-    (coinsPos, g2) = sample g1 10 (iCoinCoords maze)
-    (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
+    (coinsPos, g2) = sample g1 30 (iBlankCoords maze)
+    (monstersPos, g3) = sample g2 15 (iBlankCoords maze)
     players = replicate (fromIntegral n) (Player (iMazeEntranceCoord maze) 0 False)
     ngf = newGameForm (NewGameFormState numRows numCols (fromIntegral n) alg size)
 
@@ -269,8 +257,8 @@ drawCell gs coord =
       | otherwise = "  "
     isBlocked = isWall cell
     isPlayerPos = coord == playerPos0
-    isStart = coord == getCoord (maxRows `div` 2) 0
-    isFinish = coord == getCoord (maxRows `div` 2) (maxCols-1)
+    isStart = coord == newCoord (maxRows `div` 2) 0
+    isFinish = coord == newCoord (maxRows `div` 2) (maxCols-1)
     isCoin = coord `elem` coinsPos
     isMonster = coord `elem` monstersPos
     attr = case (isStart, isFinish, isPlayerPos, isCoin, isMonster, isBlocked) of
@@ -319,7 +307,7 @@ gsMove i gs dir = case nPos of
   Just nPos -> gs''
     where
       --goal = snd (iMazeBounds $ gs ^. gsMaze)
-      gs' = gsGetCoin i (gs & gsPlayers .~ (players & ix i .~ p {_pPos = nPos, _pSolved = nPos == getCoord (maxRows `div` 2) (maxCols-1)}))
+      gs' = gsGetCoin i (gs & gsPlayers .~ (players & ix i .~ p {_pPos = nPos, _pSolved = nPos == newCoord (maxRows `div` 2) (maxCols-1)}))
       coins = p ^. pCoins
       gs'' = (if isSolved gs' then gsGameMode . gmSolvingState .~ Solved (secondsElapsed gs) coins else id) gs'
   Nothing -> gs
@@ -342,7 +330,7 @@ gsGetCoin i gs = case (p ^. pPos) `elem` (gs ^. gsCoinsPos) of
 gsMoveMonsters :: GameState -> GameState
 gsMoveMonsters gs = gs''
   where
-    (dirs, newGen) = sample (gs ^. gsGen) 5 [DDown, DUp, DLeft, DRight]
+    (dirs, newGen) = sample (gs ^. gsGen) 15 [DDown, DUp, DLeft, DRight]
     gs' = gs & gsGen .~ newGen
     gs'' = gs' & gsMonstersPos .~ zipWith moveMonster dirs (gs' ^. gsMonstersPos)
     moveMonster dir c

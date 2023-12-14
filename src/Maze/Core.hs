@@ -12,24 +12,16 @@ module Maze.Core
     coordCol,
     getRow,
     getCol,
-    getCoord,
-    -- , Wall
-    -- , wallNeighbors
-    -- , wallDirection
+    newCoord,
     Cell,
     isWall,
     Direction (..),
-
     -- * Mutable maze
     STMaze,
     newSTMaze,
     stMazeBounds,
-    -- , stMazeInnerWalls
     stMazeNeighborCoords,
-    stMazeOpenCoordDir,
     stMazeCoordBlocked,
-    -- , stMazeOpenWall
-
     -- * Immutable maze
     IMaze,
     freezeSTMaze,
@@ -39,7 +31,7 @@ module Maze.Core
     iMazeGetCell,
     iMazeEntranceCoord,
     sample,
-    iCoinCoords,
+    iBlankCoords,
   )
 where
 
@@ -53,29 +45,21 @@ import Data.Word
 import System.Random
 
 maxRows :: Word32
-maxRows = 20
+maxRows = 30
 
 maxCols :: Word32
-maxCols = 40
+maxCols = 50
 
 -- | A single cell of a 2-dimensional maze.
-data Cell = Cell
-  { -- | Is this cell connected to its neighbor on the right?
-    cellOpenRight :: Bool,
-    -- | Is this cell connected to its neighbor on the left?
-    cellOpenLeft :: Bool,
-    -- | Is this cell connected to its neighbor above?
-    cellOpenUp :: Bool,
-    -- | Is this cell connected to its neighbor below?
-    cellOpenDown :: Bool,
-    -- | Is this cell a wall?
+newtype Cell = Cell
+  { -- | Is this cell a wall?
     isWall :: Bool
   }
   deriving (Show)
 
 -- | Create a fresh cell with both right and down closed.
 newCell :: Cell
-newCell = Cell False False False False False
+newCell = Cell False
 
 -- | The location of a cell within a maze.
 data Coord = C
@@ -86,24 +70,27 @@ data Coord = C
   }
   deriving (Show, Eq, Ord, Ix)
 
+-- | Get row from a coord.
 getRow :: Coord -> Word32
 getRow (C r _) = r
 
+-- | Get column from a coord.
 getCol :: Coord -> Word32
 getCol (C _ c) = c
 
-getCoord :: Word32 -> Word32 -> Coord
-getCoord = C
+-- | Generate a new coord from row and colomn.
+newCoord :: Word32 -> Word32 -> Coord
+newCoord = C
 
 -- | Represents a direction relating one cell to another.
 data Direction = DUp | DDown | DLeft | DRight deriving (Show, Eq)
 
 -- | Get the opposite direction.
--- flipDirection :: Direction -> Direction
--- flipDirection DUp = DDown
--- flipDirection DDown = DUp
--- flipDirection DLeft = DRight
--- flipDirection DRight = DLeft
+flipDirection :: Direction -> Direction
+flipDirection DUp = DDown
+flipDirection DDown = DUp
+flipDirection DLeft = DRight
+flipDirection DRight = DLeft
 
 -- | Get the neighbor of a cell in a particular direction. Since we don't check
 -- bounds, this can return a coordinate outside the maze (including a negative
@@ -151,32 +138,6 @@ stMazeNeighborCoords maze pos =
   let ns = [(dir, neighborCoord dir pos) | dir <- [DUp, DDown, DLeft, DRight]]
    in filterM (stMazeInBounds maze . snd) ns
 
--- | Open up one of the walls surrounding a cell, given the cell coordinate and
--- the direction of the wall relative to that coordinate. If the direction leads
--- us to a cell outside the maze, do nothing, but return 'False'.
-stMazeOpenCoordDir :: STMaze s -> Coord -> Direction -> ST s Bool
-stMazeOpenCoordDir maze pos dir = do
-  let nPos = neighborCoord dir pos
-  inBounds <- stMazeInBounds maze nPos
-  when inBounds $ do
-    let arr = stMazeArray maze
-    cell <- readArray arr pos
-    nCell <- readArray arr nPos
-    case dir of
-      DUp -> do
-        writeArray arr pos (cell {cellOpenUp = True})
-        writeArray arr nPos (nCell {cellOpenDown = True, isWall = False})
-      DDown -> do
-        writeArray arr pos (cell {cellOpenDown = True})
-        writeArray arr nPos (nCell {cellOpenUp = True, isWall = False})
-      DLeft -> do
-        writeArray arr pos (cell {cellOpenLeft = True})
-        writeArray arr nPos (nCell {cellOpenRight = True, isWall = False})
-      DRight -> do
-        writeArray arr pos (cell {cellOpenRight = True})
-        writeArray arr nPos (nCell {cellOpenLeft = True, isWall = False})
-  return inBounds
-
 -- | Set the cell as a wall, given the coordinate of the cell. If the coordinate is
 --  outside the maze, do nothing, but return 'False'.
 stMazeCoordBlocked :: STMaze s -> Coord -> ST s Bool
@@ -208,11 +169,13 @@ iMazeInBounds = inRange . bounds . iMazeArray
 iMazeGetCell :: IMaze -> Coord -> Cell
 iMazeGetCell maze pos = iMazeArray maze ! pos
 
+-- | Get the coordinate of the entrance.
 iMazeEntranceCoord :: IMaze -> Coord
 iMazeEntranceCoord maze = C (maxRows `div` 2) 0
 
+-- | Get the coordinate of the exit.
 iMazeExitCoord :: IMaze -> Coord
-iMazeExitCoord maze = C 0 (maxCols `div` 2)
+iMazeExitCoord maze = C (maxRows `div` 2) (maxCols - 1)
 
 -- | Given a maze, a coordinate, and a direction we'd like to move, return the
 -- coordinate we are trying to move to, if it is possible to do so; otherwise
@@ -227,15 +190,7 @@ iMazeMove maze pos dir =
     nPos = neighborCoord dir pos
     nCell = iMazeGetCell maze nPos
 
--- iMazeMove maze pos dir
---   | nPos <- neighborCoord dir pos, iMazeInBounds maze nPos =
---     let cell = iMazeGetCell maze pos
---         nCell = iMazeGetCell maze nPos
---         open = isWall nCell
---     in if open then Just nPos else Nothing
---   | otherwise = Nothing
-
--- | Extract a list of lists of coordinates from an 'IMaze', in row-major order.
+-- | Extract a list of lists of coordinates from an 'IMaze' (including the border walls), in row-major order.
 iMazeCoords :: IMaze -> [[Coord]]
 iMazeCoords maze = rows
   where
@@ -258,8 +213,9 @@ sample gen k xs =
       (xs', g'') = sample g' (k - 1) xs
    in (xs !! index : xs', g'')
 
-iCoinCoords :: IMaze -> [Coord]
-iCoinCoords maze = tail (init coords)
+-- | Get the cells' coordinates which are not walls.
+iBlankCoords :: IMaze -> [Coord]
+iBlankCoords maze = coords
   where
     (_, C hiR hiC) = iMazeBounds maze
     coords =

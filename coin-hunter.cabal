@@ -21,11 +21,7 @@ extra-source-files: CHANGELOG.md
 library
     exposed-modules:  Maze
                       Maze.Algorithms
-                      Maze.Algorithms.BinaryTree
-                      Maze.Algorithms.Kruskal
-                      Maze.Algorithms.RecursiveBacktracking
-                      Maze.Algorithms.Prim
-                      Maze.Algorithms.MyAlgorithm
+                      Maze.Algorithms.RandomGeneration
                       Maze.Core
                       Maze.Utils
 
