@@ -14,7 +14,6 @@ module Maze
     -- * Maze construction algorithms
   , recursiveBacktracking
   , binaryTree
-  , kruskal
   ) where
 
 import Maze.Core

@@ -69,7 +69,6 @@ makeLenses ''GameMode
 data Algorithm
   = RecursiveBacktracking
   | BinaryTree
-  | Kruskal
   deriving (Show, Eq, Ord)
 
 data Size = Big | Small
@@ -98,8 +97,7 @@ newGameForm =
         B.@@= B.radioField
           ngfAlgorithm
           [ (RecursiveBacktracking, NGFRecursiveBacktracking, "recursive backtracking"),
-            (BinaryTree, NGFBinaryTree, "binary tree"),
-            (Kruskal, NGFKruskal, "kruskal's algorithm")
+            (BinaryTree, NGFBinaryTree, "binary tree")
           ],
       label "size: "
         B.@@= B.radioField
@@ -176,7 +174,6 @@ initGameState numRows numCols n alg size g = GameState maze players coinsPos mon
     (maze, g1) = case alg of
       RecursiveBacktracking -> recursiveBacktracking g numRows numCols
       BinaryTree -> binaryTree g numRows numCols
-      Kruskal -> kruskal g numRows numCols
     (topLeft, _) = iMazeBounds maze
     (coinsPos, g2) = sample g1 10 (iCoinCoords maze)
     (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
@@ -310,13 +307,13 @@ drawCellBig gs coord =
 
     mLeftBorder = if col == 0 then "│" else ""
     m
-      | isMonster = " \986057 " -- 👾
-      -- \| isMonster = " \983712 " -- 👻
-      -- \| isMonster = " ⚉ "
-      | isPlayerPos = " \986216 " -- 😀
-      -- \| isPlayerPos = " ⛑ "
-      | isCoin = " ◉ "
       | isFinish = " ⚐ "
+      | isMonster = " \986057 " -- 👾
+      -- | isMonster = " \983712 " -- 👻
+      -- | isMonster = " ⚉ "
+      | isPlayerPos = " \986216 " -- 😀
+      -- | isPlayerPos = " ⛑ "
+      | isCoin = " ◉ "
       | otherwise = "   "
 
     isDownClear = isJust (iMazeMove maze coord DDown)
@@ -470,7 +467,7 @@ handleEvent event = do
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put $ gs & gsGameMode . gmDialog .~ NewGameDialog
         -- Handle custom events
         B.AppEvent (Tick currentTime) -> B.put $ gsMeetMonster gs & gsCurrentTime .~ currentTime
-        B.AppEvent (ClientMove i dir) -> B.put $ gsMove0 gs dir
+        B.AppEvent (ClientMove i dir) -> B.put $ gsMove i gs dir
         B.AppEvent MonsterTick -> B.put $ gsMoveMonsters gs
         B.AppEvent QuitGame -> B.halt
         -- Other events and default

@@ -3,10 +3,8 @@
 module Maze.Algorithms
   ( recursiveBacktracking
   , binaryTree
-  , kruskal
   ) where
 
 import Maze.Algorithms.BinaryTree
-import Maze.Algorithms.Kruskal
 import Maze.Algorithms.RecursiveBacktracking
 import Maze.Algorithms.Prim
