@@ -271,7 +271,7 @@ drawCellBig gs coord =
   B.vBox
     [ B.hBox
         [ B.str tLeftBorder,
-          B.str tCenterBorder, 
+          B.str tCenterBorder,
           B.str tRigthBorder
         ],
       B.hBox
@@ -292,46 +292,50 @@ drawCellBig gs coord =
     monstersPos = gs ^. gsMonstersPos
     maze = gs ^. gsMaze
     (topLeft, bottomRight) = iMazeBounds maze
-    tLeftBorder = if coord == topLeft then "\9484" else ""
-    tCenterBorder = if row == 0 then "\9472\9472\9472" else ""
-    tRigthBorder = if row == 0 then (if col == 9 then "\9488" else "\9472") else ""
-    
-    mLeftBorder = if col == 0 then "\9474" else ""
+    tLeftBorder = if coord == topLeft then "┌" else ""
+    tCenterBorder = if row == 0 then "───" else ""
+    tRigthBorder = if row == 0 then (if col == 9 then "┐" else "─") else ""
+
+    mLeftBorder = if col == 0 then "│" else ""
     m
-      | coord == playerPos = " \9937 "
-      | coord `elem` monstersPos = " \9865 "
-      | coord `elem` coinsPos = " \9673 "
+      | coord == playerPos = " ⛑ "
+      | coord `elem` monstersPos = " ⚉ "
+      | coord `elem` coinsPos = " ◉ "
       | otherwise = "   "
-    
+
     isDownClear = isJust (iMazeMove maze coord DDown)
     isRightClear = isJust (iMazeMove maze coord DRight)
 
-    mRightBorder = if isRightClear then " " else "\9474"
+    mRightBorder = if isRightClear then "" else "│"
 
-    bLeftBorder = if col == 0 then (if row == 9 then "\9492" else "\9474") else ""
-    bCenterBorder = if isDownClear then "   " else "\9472\9472\9472" 
+    bLeftBorder = if col == 0 then (if row == 9 then "└" else "│") else ""
+    bCenterBorder = if isDownClear then "   " else "───"
 
     downCoord = neighborCoord DDown coord
     rightCoord = neighborCoord DRight coord
-    isDwonRightClear = isJust (iMazeMove maze downCoord DRight)
+    isDownRightClear = isJust (iMazeMove maze downCoord DRight)
     isRightDownClear = isJust (iMazeMove maze rightCoord DDown)
 
-    bRightBorder = case (isDownClear, isRightClear, isDwonRightClear, isRightDownClear) of
-       (True, True, True, True) -> " "
-       (False, True, True, True) -> "\9472"
-       (False, False, True, True) -> "\9496"
-       (False, True, False, True) -> "\9488"
-       (False, True, True, False) -> "\9472"
-       (False, False, False, True) -> "\9508"
-       (False, False, True, False) -> "\9524"
-       (False, False, False, False) -> if (row == 9 && col == 9) then "\9496" else 
-                                          (if col == 9 then "\9508" else 
-                                            (if row == 9 then "\9524"  else "\9532"))
-       (True, False, _, True) -> "\9474"
-       (True, False, True, False) -> "\9492"
-       (True, False, False, False) -> if col == 9 then "\9474" else "\9500"
-       (False, True, False, False) -> "\9472"
-       otherwise -> " "
+    bRightBorder = case (isDownClear, isRightClear, isDownRightClear, isRightDownClear) of
+      (False, True, True, _) -> "─"
+      (False, True, False, False) -> "─"
+      (False, True, False, True) -> "┐"
+      (False, False, True, True) -> "┘"
+      (False, False, False, True) -> "┤"
+      (False, False, True, False) -> "┴"
+      (False, False, False, False) -> b
+        where
+          b
+            | row == 9 && col == 9 = "┘"
+            | col == 9 = "┤"
+            | row == 9 = "┴"
+            | otherwise = "┼"
+      (True, False, _, True) -> "│"
+      (True, False, True, False) -> "└"
+      (True, False, False, False) -> if col == 9 then "│" else "├"
+      (_, _, False, _) -> "╷"
+      (_, _, _, False) -> "╶"
+      _ -> " "
 
     isPlayerPos = coord == playerPos
     isStart = coord == topLeft
@@ -358,10 +362,11 @@ status InProgress i j = B.str $ "Time: " ++ show i ++ "s" ++ " Coins: " ++ show 
 status (Solved i j) _ _ = B.str $ "Solved in " ++ show i ++ "s with " ++ show j ++ " coins." ++ " Your total score is " ++ show (getScore i j) ++ ". Nice job!"
 
 getScore :: Int -> Int -> Int
-getScore t c = if t <= 30 then c + 3
-              else if t <= 45 then c + 2
-              else if t <= 60 then c + 1
-              else c
+getScore t c
+  | t <= 30 = c + 3
+  | t <= 45 = c + 2
+  | t <= 60 = c + 1
+  | otherwise = c
 
 help :: B.Widget n
 help =
@@ -382,7 +387,6 @@ help =
 
 isSolved :: GameState -> Bool
 isSolved gs = (gs ^. gsPlayers . _1 . pPos) == snd (iMazeBounds $ gs ^. gsMaze)
-
 
 -- isSolved _ = False -- for now
 
@@ -428,10 +432,10 @@ gsMoveMonsters gs = gs''
       | otherwise = c
 
 gsMeetMonster :: GameState -> GameState
-gsMeetMonster gs = case (elem (gs ^. gsPlayers . _1 . pPos) (gs ^. gsMonstersPos)) of
-  True -> let (topLeft, _) = iMazeBounds (gs ^. gsMaze) in
-    gs & gsPlayers . _1 . pPos .~ topLeft
-  False -> gs
+gsMeetMonster gs
+  | (gs ^. gsPlayers . _1 . pPos) `elem` (gs ^. gsMonstersPos) =
+      gs & gsPlayers . _1 . pPos .~ snd (iMazeBounds (gs ^. gsMaze))
+  | otherwise = gs
 
 gsMove0 :: GameState -> Direction -> GameState
 gsMove0 = gsMove 0
@@ -449,15 +453,12 @@ handleEvent event = do
         B.VtyEvent (V.EvKey V.KRight []) -> B.put (gsMove0 gs DRight)
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
-
         -- Handle custom events
-        B.AppEvent (Tick currentTime) -> let gs' = gsMeetMonster gs
-                                          in B.put (gs' & gsCurrentTime .~ currentTime)
+        B.AppEvent (Tick currentTime) -> B.put (gsMeetMonster gs & gsCurrentTime .~ currentTime)
         -- TODO: change gsMove0 to gsMove with index i
         B.AppEvent (ClientMove i dir) -> B.put (gsMove0 gs dir)
         B.AppEvent MonsterTick -> B.put (gsMoveMonsters gs)
         B.AppEvent QuitGame -> B.halt
-
         -- Other events and default
         _ -> B.put gs
       Solved _ _ -> case event of
