@@ -53,10 +53,10 @@ import Data.Word
 import System.Random
 
 maxRows :: Word32
-maxRows = 20
+maxRows = 30
 
 maxCols :: Word32
-maxCols = 40
+maxCols = 50
 
 -- | A single cell of a 2-dimensional maze.
 data Cell = Cell
