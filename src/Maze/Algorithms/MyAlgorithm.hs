@@ -20,11 +20,26 @@ myAlgorithm g rows cols = runST $ do
   gRef <- newSTRef g
   maze <- newSTMaze rows cols
 
+  forM_ [0.. toInteger (cols-1)] $ \c -> do
+    void $ stMazeCoordBlocked maze (getCoord 0 (fromIntegral c :: Word32))
+    void $ stMazeCoordBlocked maze (getCoord (rows-1) (fromIntegral c :: Word32))
+
+  forM_ [0.. toInteger (rows-1)] $ \r -> do
+    when (r /= (toInteger rows `div` 2)) $ do
+      void $ stMazeCoordBlocked maze (getCoord (fromIntegral r:: Word32) 0)
+      void $ stMazeCoordBlocked maze (getCoord (fromIntegral r :: Word32) (cols-1))
+
   forM_ [2.. toInteger (cols-3)] $ \c -> do
-    let wallIndexs = take ((fromIntegral (rows - 2) :: Int) `div` 2) . nub $ randomRs (0,fromIntegral (rows - 2) :: Int) g 
-    forM_ [0..toInteger rows] $ \r -> do
-      when ((fromIntegral r :: Int) `elem` wallIndexs) $ do
-        void $ stMazeCoordBlocked maze (getCoord (fromIntegral c :: Word32) (fromIntegral r :: Word32))
+    let wallIndexs = []
+    --let wallIndexs = take ((fromIntegral (rows - 2) :: Int) `div` 2) . nub $ randomRs (1,fromIntegral (rows - 2) :: Int) g
+    forM_ [1..toInteger rows-1] $ \r -> do
+      when (length wallIndexs < 4) $ do
+        g <- readSTRef gRef
+        let (flag, g') = randomR (0, 4 :: Int) g
+        when (flag == (0 :: Int)) $ do
+          let wallIndexs = getCoord (fromInteger r) (fromInteger c) : wallIndexs
+          void $ stMazeCoordBlocked maze (getCoord (fromIntegral r :: Word32) (fromIntegral c :: Word32))
+        writeSTRef gRef g'
 
   imaze <- freezeSTMaze maze
   g' <- readSTRef gRef

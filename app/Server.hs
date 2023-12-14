@@ -78,5 +78,4 @@ main = do
   putStrLn "Generating maze..."
   async $ mazeGen eventChannel
   putStrLn "Starting server..."
-  serverTask <- async $ runServer "localhost" 9160 (server eventChannel)
-  wait serverTask
+  runServer "localhost" 9160 (server eventChannel)

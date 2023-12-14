@@ -269,8 +269,8 @@ drawCell gs coord =
       | otherwise = "  "
     isBlocked = isWall cell
     isPlayerPos = coord == playerPos0
-    isStart = coord == topLeft
-    isFinish = coord == bottomRight
+    isStart = coord == getCoord (maxRows `div` 2) 0
+    isFinish = coord == getCoord (maxRows `div` 2) (maxCols-1)
     isCoin = coord `elem` coinsPos
     isMonster = coord `elem` monstersPos
     attr = case (isStart, isFinish, isPlayerPos, isCoin, isMonster, isBlocked) of
@@ -318,8 +318,8 @@ gsMove :: Int -> GameState -> Direction -> GameState
 gsMove i gs dir = case nPos of
   Just nPos -> gs''
     where
-      goal = snd (iMazeBounds $ gs ^. gsMaze)
-      gs' = gsGetCoin i (gs & gsPlayers .~ (players & ix i .~ p {_pPos = nPos, _pSolved = nPos == goal}))
+      --goal = snd (iMazeBounds $ gs ^. gsMaze)
+      gs' = gsGetCoin i (gs & gsPlayers .~ (players & ix i .~ p {_pPos = nPos, _pSolved = nPos == getCoord (maxRows `div` 2) (maxCols-1)}))
       coins = p ^. pCoins
       gs'' = (if isSolved gs' then gsGameMode . gmSolvingState .~ Solved (secondsElapsed gs) coins else id) gs'
   Nothing -> gs
@@ -368,10 +368,6 @@ handleEvent event = do
         B.VtyEvent (V.EvKey (V.KChar 'w') []) -> B.put (gsMove0 gs DUp)
         B.VtyEvent (V.EvKey (V.KChar 's') []) -> B.put (gsMove0 gs DDown)
         B.VtyEvent (V.EvKey (V.KChar 'a') []) -> B.put (gsMove0 gs DLeft)
-        B.VtyEvent (V.EvKey (V.KChar 'd') []) -> B.put (gsMove0 gs DRight)
-        B.VtyEvent (V.EvKey (V.KChar 'w') []) -> B.put (gsMove0 gs DUp)
-        B.VtyEvent (V.EvKey (V.KChar 'a') []) -> B.put (gsMove0 gs DLeft)
-        B.VtyEvent (V.EvKey (V.KChar 's') []) -> B.put (gsMove0 gs DDown)
         B.VtyEvent (V.EvKey (V.KChar 'd') []) -> B.put (gsMove0 gs DRight)
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put (gs & gsGameMode . gmDialog .~ NewGameDialog)
