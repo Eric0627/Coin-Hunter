@@ -31,6 +31,8 @@ module Maze.Core
   , sample
   , iCoinCoords
   , neighborCoord
+  , prop_sampleLength
+  , prop_sampleElements
   ) where
 
 import Control.Monad (filterM, when)
@@ -42,6 +44,7 @@ import Data.Bits
 import Data.Word
 
 import System.Random
+import Test.QuickCheck hiding (sample)
 
 -- | A single cell of a 2-dimensional maze.
 data Cell = Cell { cellOpenRight :: Bool
@@ -243,12 +246,41 @@ iMazeCoords maze = rows
 --
 sample :: (RandomGen g) => g -> Int -> [a] -> ([a], g)
 sample gen 0 _ = ([], gen)
-sample gen k xs = let (index, g') = randomR (0, length xs - 1) gen
-                      (xs', g'') = sample g' (k - 1) xs
+sample gen k xs 
+  | length xs == 0 = ([], gen)
+  | otherwise = let k' = min k (length xs)
+                    (index, g') = randomR (0, length xs - 1) gen
+                    (xs', g'') = sample g' (k' - 1) xs
                 in ((xs !! index : xs'), g'')
+
 
 iCoinCoords :: IMaze -> [Coord]
 iCoinCoords maze = tail (init coords)
   where (_, (C hiR hiC)) = iMazeBounds maze
         coords = [C (fromInteger r) (fromInteger c)
                  | c <- [0..toInteger hiC], r <- [0..toInteger hiR]]
+
+
+-- >>> quickCheck prop_sampleLength
+-- +++ OK, passed 100 tests; 104 discarded.
+--
+
+-- >>> quickCheck prop_sampleElements
+-- +++ OK, passed 100 tests; 106 discarded.
+--
+
+stdGenGen :: Gen StdGen
+stdGenGen = mkStdGen <$> arbitrary
+
+-- Property 1: Correct length
+prop_sampleLength :: Int -> [Int] -> Property
+prop_sampleLength k xs = (k >= 0 && not (null xs)) ==>
+    forAll stdGenGen $ \gen ->
+        length (fst (sample gen k xs)) == min k (length xs)
+
+-- Property 2: Elements from original list
+prop_sampleElements :: Int -> [Int] -> Property
+prop_sampleElements k xs = (k >= 0 && not (null xs)) ==>
+    forAll stdGenGen $ \gen ->
+        let sampled = fst (sample gen k xs)
+        in all (`elem` xs) sampled

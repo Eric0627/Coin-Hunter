@@ -87,7 +87,6 @@ executable Server
                     , coin-hunter
                     , array
                     , brick
-                    , containers
                     , microlens-platform
                     , random
                     , text
