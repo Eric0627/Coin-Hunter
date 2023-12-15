@@ -179,8 +179,8 @@ draw gs = case gs ^. (gsGameMode . gmDialog) of
 drawNewGame :: GameState -> B.Widget Name
 drawNewGame gs =
   B.center $
-    B.vLimit 30 $
-      B.hLimit 50 $
+    B.vLimit 15 $
+      B.hLimit 55 $
         B.vBox
           [ B.borderWithLabel (B.str "New Game") $ B.renderForm (gs ^. gsNewGameForm),
             B.center $ B.str "(press \'return\' to start a new game or \'esc\' to cancel)"
@@ -190,12 +190,11 @@ drawMain :: GameState -> B.Widget n
 drawMain gs =
   B.vBox
     [ B.vLimit 3 $ B.center $ B.str "Coin Hunter",
-      B.center $
-        B.vBox
-          [ B.hCenter $ drawMaze gs,
-            B.hCenter $ status state (secondsElapsed gs) coins0
-          ],
-      B.vLimit 3 $ B.center help
+      B.vBox
+        [ B.hCenter $ drawMaze gs,
+          B.hCenter $ status state (secondsElapsed gs) coins0
+        ],
+      B.vLimit 5 $ B.center help
     ]
   where
     state = gs ^. gsGameMode . gmSolvingState
