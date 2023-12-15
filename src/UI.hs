@@ -149,7 +149,7 @@ initGame numRows numCols n g = GameState maze players coinsPos monstersPos g3 ng
   where
     (maze, g1) = binaryTree g numRows numCols
     (topLeft, _) = iMazeBounds maze
-    (coinsPos, g2) = sample g1 10 (iCoinCoords maze)
+    (coinsPos, g2) = sample g1 (fromIntegral $ numRows `max` numCols) (iCoinCoords maze)
     (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
     players = replicate (fromIntegral n) (Player topLeft 0 0 False)
     ngf = newGameForm (NewGameFormState numRows numCols (fromIntegral n))
