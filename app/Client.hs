@@ -1,12 +1,10 @@
 module Main where
 
 import Brick.AttrMap
-import Brick.Focus
 import Brick.Main
 import Brick.Types
 import Brick.Widgets.Center
 import Brick.Widgets.Core
-import Brick.Widgets.Edit
 import Control.Monad (forever, void, when)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString (ByteString)
@@ -15,7 +13,6 @@ import Data.Text (Text)
 import Graphics.Vty
 import Network.WebSockets
 import System.Process.Extra (system)
-import Prelude hiding (unlines)
 
 data Name = Message deriving (Eq, Ord, Show)
 

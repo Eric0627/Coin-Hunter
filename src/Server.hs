@@ -1,7 +1,7 @@
 module Server where
 
 import Brick.BChan (BChan, newBChan, writeBChan)
-import Control.Concurrent (MVar, ThreadId, forkIO, modifyMVar, modifyMVar_, newMVar, putMVar, takeMVar, withMVar, killThread)
+import Control.Concurrent (MVar, ThreadId, forkIO, killThread, modifyMVar, modifyMVar_, newMVar, putMVar, takeMVar, withMVar)
 import Control.Monad (forever, void)
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (pack, unpack)

@@ -10,7 +10,7 @@ import qualified Brick.Forms as B
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as B
 import qualified Brick.Widgets.Edit as B
-import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay, MVar, modifyMVar, newMVar)
+import Control.Concurrent (MVar, ThreadId, forkIO, killThread, modifyMVar, newMVar, threadDelay)
 import Control.Monad (forM_, forever, unless, void, (<=<))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.List (delete, elemIndex)
@@ -453,10 +453,9 @@ attrMap _ =
       (B.invalidFormInputAttr, V.white `B.on` V.red)
     ]
 
-mazeGen :: Word32 -> B.BChan MazeEvent -> IO ()
-mazeGen n eventChannel = do
-  let builder = V.mkVty V.defaultConfig
-  initialVty <- builder
+mazeGen :: IO ()
+mazeGen = do
+  eventChannel <- B.newBChan 10
   forkIO $
     forever $
       getCurrentTime
@@ -471,10 +470,12 @@ mazeGen n eventChannel = do
 
   reseter <- forkServer eventChannel
 
+  let builder = V.mkVty V.defaultConfig
+  initialVty <- builder
   void $
     B.customMain
       initialVty
       builder
       (Just eventChannel)
       mazeApp
-      (initGame 10 10 n g reseter st st)
+      (initGame 10 10 1 g reseter st st)
