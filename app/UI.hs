@@ -119,8 +119,6 @@ type Players = [Player]
 
 data GameState = GameState
   { _gsMaze :: IMaze,
-    -- , _gsPos :: Coord
-    -- , _gsCoins :: Int
     _gsPlayers :: Players,
     _gsCoinsPos :: [Coord],
     _gsMonstersPos :: [Coord],
@@ -195,7 +193,7 @@ drawMain gs =
     [ B.vLimit 3 $ B.center $ B.str "Coin Hunter",
       B.vBox
         [ B.hCenter $ drawMaze gs,
-          B.hCenter $ status gs
+          B.hCenter $ status gs (secondsElapsed gs)
         ],
       B.vLimit 5 $ B.center help
     ]
@@ -303,12 +301,12 @@ secondsElapsed gs =
     nominalDiffTimeToSeconds $
       diffUTCTime (gs ^. gsCurrentTime) (gs ^. gsStartTime)
 
-status :: GameState -> B.Widget n
-status gs
+status :: GameState -> Int -> B.Widget n
+status gs time
  | InProgress == gs ^. gsGameMode . gmSolvingState = 
-  B.str $ "Time: " ++ show (secondsElapsed gs) ++ "s" ++ (foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Coins: " ++ show ( gs ^. gsPlayers . to (!! i) ^. pCoins)) [0..length (gs ^. gsPlayers)-1]))
+  B.str $ "Time: " ++ show time ++ "s" ++ (foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Coins: " ++ show ( gs ^. gsPlayers . to (!! i) ^. pCoins)) [0..length (gs ^. gsPlayers)-1]))
  | Solved == gs ^. gsGameMode . gmSolvingState = 
-  B.str $ "Solved in " ++ show (secondsElapsed gs) ++ "s." ++ (foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Score: " ++ show ( gs ^. gsPlayers . to (!! i) ^. pScore)) [0..length (gs ^. gsPlayers)-1]))
+  B.str $ "Solved in " ++ show time ++ "s." ++ (foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Score: " ++ show ( gs ^. gsPlayers . to (!! i) ^. pScore)) [0..length (gs ^. gsPlayers)-1]))
  | otherwise = B.str "" 
 
 getScore :: Int -> Int -> Int
