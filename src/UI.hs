@@ -148,7 +148,7 @@ initGame numRows numCols n g = GameState maze players coinsPos monstersPos g3 ng
     (maze, g1) = binaryTree g numRows numCols
     (topLeft, _) = iMazeBounds maze
     (coinsPos, g2) = sample g1 (fromIntegral $ numRows `max` numCols) (iCoinCoords maze)
-    (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
+    (monstersPos, g3) = sample g2 (fromIntegral n) (iCoinCoords maze)
     players = replicate (fromIntegral n) (Player topLeft 0 0 False)
     ngf = newGameForm (NewGameFormState numRows numCols (fromIntegral n))
 
@@ -295,10 +295,12 @@ drawCell gs coord =
     isFinish = coord == bottomRight
     isCoin = coord `elem` coinsPos
     isMonster = coord `elem` monstersPos
+    isPlayer = coord `elem` playerPos 
     attr
       | isFinish = B.attrName "finish"
       | isMonster = B.attrName "monster"
       | isCoin = B.attrName "coin"
+      | isPlayer = B.attrName "pos"
       | otherwise = B.attrName "blank"
 
 secondsElapsed :: GameState -> Int
