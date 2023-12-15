@@ -52,8 +52,9 @@ data Dialog
 
 data SolvingState
   = InProgress
-  | Solved Int Int
-  | NewGame
+  | Solved
+  | NewGame 
+  deriving (Eq)
 
 data GameMode = GameMode
   { _gmSolvingState :: SolvingState,
@@ -108,6 +109,7 @@ editShowableFieldWithValidate stLens n validate = B.editField stLens n limit ini
 data Player = Player
   { _pPos :: Coord,
     _pCoins :: Int,
+    _pScore :: Int,
     _pSolved :: Bool
   }
 
@@ -147,7 +149,7 @@ initGameState numRows numCols n g = GameState maze players coinsPos monstersPos 
     (topLeft, _) = iMazeBounds maze
     (coinsPos, g2) = sample g1 10 (iCoinCoords maze)
     (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
-    players = replicate (fromIntegral n) (Player topLeft 0 False)
+    players = replicate (fromIntegral n) (Player topLeft 0 0 False)
     ngf = newGameForm (NewGameFormState numRows numCols (fromIntegral n))
 
 restartGame :: GameState -> IO GameState
@@ -193,13 +195,10 @@ drawMain gs =
     [ B.vLimit 3 $ B.center $ B.str "Coin Hunter",
       B.vBox
         [ B.hCenter $ drawMaze gs,
-          B.hCenter $ status state (secondsElapsed gs) coins0
+          B.hCenter $ status gs
         ],
       B.vLimit 5 $ B.center help
     ]
-  where
-    state = gs ^. gsGameMode . gmSolvingState
-    coins0 = gs ^. gsPlayers . to head . pCoins
 
 drawMaze :: GameState -> B.Widget n
 drawMaze gs =
@@ -304,9 +303,13 @@ secondsElapsed gs =
     nominalDiffTimeToSeconds $
       diffUTCTime (gs ^. gsCurrentTime) (gs ^. gsStartTime)
 
-status :: SolvingState -> Int -> Int -> B.Widget n
-status InProgress i j = B.str $ "Time: " ++ show i ++ "s" ++ " Coins: " ++ show j
-status (Solved i j) _ _ = B.str $ "Solved in " ++ show i ++ "s with " ++ show j ++ " coins." ++ " Your total score is " ++ show (getScore i j) ++ ". Nice job!"
+status :: GameState -> B.Widget n
+status gs
+ | InProgress == gs ^. gsGameMode . gmSolvingState = 
+  B.str $ "Time: " ++ show (secondsElapsed gs) ++ "s" ++ (foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Coins: " ++ show ( gs ^. gsPlayers . to (!! i) ^. pCoins)) [0..length (gs ^. gsPlayers)-1]))
+ | Solved == gs ^. gsGameMode . gmSolvingState = 
+  B.str $ "Solved in " ++ show (secondsElapsed gs) ++ "s." ++ (foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Score: " ++ show ( gs ^. gsPlayers . to (!! i) ^. pScore)) [0..length (gs ^. gsPlayers)-1]))
+ | otherwise = B.str "" 
 
 getScore :: Int -> Int -> Int
 getScore t c
@@ -336,17 +339,22 @@ isSolved :: GameState -> Bool
 isSolved gs = all (^. pSolved) (gs ^. gsPlayers)
 
 gsMove :: Int -> GameState -> Direction -> GameState
-gsMove i gs dir = case nPos of
-  Just nPos -> gs''
-    where
-      goal = snd (iMazeBounds $ gs ^. gsMaze)
-      gs' = gsGetCoin i (gs & gsPlayers . ix i .~ p {_pPos = nPos, _pSolved = nPos == goal})
-      coins = p ^. pCoins
-      gs''
-        | isSolved gs' = gs' & gsGameMode . gmSolvingState .~ Solved (secondsElapsed gs) coins
-        | nPos `elem` gs ^. gsMonstersPos = gs & gsPlayers . ix i . pPos .~ fst (iMazeBounds (gs ^. gsMaze))
-        | otherwise = gs'
-  Nothing -> gs
+gsMove i gs dir
+  | p ^. pSolved = gs
+  | otherwise = case nPos of
+    Just nPos -> gs''
+      where
+        goal = snd (iMazeBounds $ gs ^. gsMaze)
+        score = if (p ^. pScore == 0 && nPos == goal) 
+                  then (getScore (secondsElapsed gs) (p ^. pCoins) + p ^. pCoins)
+                  else 0
+        gs' = gsGetCoin i (gs & gsPlayers . ix i .~ p {_pPos = nPos, _pSolved = nPos == goal, _pScore = score})
+        coins = p ^. pCoins
+        gs''
+          | isSolved gs' = gs' & gsGameMode . gmSolvingState .~ Solved
+          | nPos `elem` gs ^. gsMonstersPos = gs & gsPlayers . ix i . pPos .~ fst (iMazeBounds (gs ^. gsMaze))
+          | otherwise = gs'
+    Nothing -> gs
   where
     players = gs ^. gsPlayers
     p = players ^. to (!! i)
@@ -408,7 +416,7 @@ handleEvent event = do
         B.AppEvent QuitGame -> B.halt
         -- Other events and default
         _ -> return ()
-      Solved _ _ -> case event of
+      Solved -> case event of
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put $ gs & gsGameMode . gmDialog .~ NewGameDialog
         B.AppEvent (Tick currentTime) -> B.put $ gs & gsCurrentTime .~ currentTime
