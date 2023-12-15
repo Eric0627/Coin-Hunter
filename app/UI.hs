@@ -22,6 +22,7 @@ import Lens.Micro.Platform
 import Maze
 import System.Random (StdGen)
 import Text.Read (readMaybe)
+import Data.Array (Ix(index))
 
 maxRows :: Word32
 maxRows = 20
@@ -296,7 +297,7 @@ drawCellBig gs coord =
     ]
   where
     (row, col) = (coordRow coord, coordCol coord)
-    playerPos0 = gs ^. gsPlayers . to head . pPos
+    playerPos = map (\i -> gs ^. gsPlayers . to (!! i) ^. pPos) [0..length (gs ^. gsPlayers)-1]
     coinsPos = gs ^. gsCoinsPos
     monstersPos = gs ^. gsMonstersPos
     maze = gs ^. gsMaze
@@ -306,12 +307,16 @@ drawCellBig gs coord =
     tRigthBorder = if row == 0 then (if col == 9 then "┐" else "─") else ""
 
     mLeftBorder = if col == 0 then "│" else ""
+    playerIcons = [" \9898 ", " \9899 ", " \9917 ", " \9918 "]
+    playerID = case elemIndex coord playerPos of
+      Just index -> index
+      Nothing -> -1
     m
       | isFinish = " ⚐ "
       | isMonster = " \986057 " -- 👾
       -- | isMonster = " \983712 " -- 👻
       -- | isMonster = " ⚉ "
-      | isPlayerPos = " \986216 " -- 😀
+      | playerID /= -1 = playerIcons !! playerID -- 😀
       -- | isPlayerPos = " ⛑ "
       | isCoin = " ◉ "
       | otherwise = "   "
@@ -350,7 +355,6 @@ drawCellBig gs coord =
       (_, _, _, False) -> "╶"
       _ -> " "
 
-    isPlayerPos = coord == playerPos0
     isStart = coord == topLeft
     isFinish = coord == bottomRight
     isCoin = coord `elem` coinsPos
@@ -358,7 +362,6 @@ drawCellBig gs coord =
     attr
       | isFinish = B.attrName "finish"
       | isMonster = B.attrName "monster"
-      | isPlayerPos = B.attrName "pos"
       | isCoin = B.attrName "coin"
       | otherwise = B.attrName "blank"
 
