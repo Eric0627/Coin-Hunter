@@ -21,18 +21,24 @@ mazeGen :: BChan MazeEvent -> IO ()
 mazeGen eventChannel = do
   let builder = mkVty defaultConfig
   initialVty <- builder
-  forkIO $ forever $ getCurrentTime >>= writeBChan eventChannel . Tick
-    >> threadDelay 100000  -- tick every 0.1 seconds
-  forkIO $ forever $ writeBChan eventChannel MonsterTick
-    >> threadDelay 1000000  -- move monster every second
-
+  forkIO $
+    forever $
+      getCurrentTime
+        >>= writeBChan eventChannel . Tick
+        >> threadDelay 100000 -- tick every 0.1 seconds
+  forkIO $
+    forever $
+      writeBChan eventChannel MonsterTick
+        >> threadDelay 1000000 -- move monster every second
   st <- getCurrentTime
   g <- getStdGen
-  void $ customMain
-    initialVty
-    builder
-    (Just eventChannel)
-    mazeApp (initGameState 10 10 4 g st st)
+  void $
+    customMain
+      initialVty
+      builder
+      (Just eventChannel)
+      mazeApp
+      (initGameState 10 10 4 g st st)
 
 data Command = Move Maze.Core.Direction | Quit deriving (Show, Eq)
 
@@ -49,31 +55,29 @@ commandP = (Move <$> directionP) <|> (char 'q' >> return Quit)
 parseCommand :: ByteString -> Either ParseError Command
 parseCommand = runParser commandP () ""
 
-server :: BChan MazeEvent -> ServerApp
-server eventChannel pending = do
-  conn <- acceptRequest pending
-  -- eventChannel <- newBChan 10
-  counter <- newMVar 1
-
-  withPingThread conn 30 (return ()) $ do
-    i <- takeMVar counter
-    putMVar counter (i + 1)
-    forever $ do
-      msg <- receiveData conn
-      -- putStrLn $ "Received: " ++ Data.ByteString.Char8.unpack msg
-      case parseCommand msg of
-        Left err -> putStrLn " (invalid command)"
-        Right Quit -> do
-          putStrLn " (quit)"
-          writeBChan eventChannel QuitGame
-        -- sendClose conn (Data.ByteString.Char8.pack "Quit")
-        Right (Move dir) -> do
-          -- putStrLn $ "Client sent move command: " ++ show dir
-          writeBChan eventChannel (ClientMove i dir)
-
 main :: IO ()
 main = do
-  -- system "clear"
+  counter <- newMVar 1
+  system "clear"
   eventChannel <- newBChan 10
+
+  let server eventChannel pending = do
+        conn <- acceptRequest pending
+        withPingThread conn 30 (return ()) $ do
+          i <- takeMVar counter
+          putMVar counter (i + 1)
+          forever $ do
+            msg <- receiveData conn
+            -- putStrLn $ "Received: " ++ Data.ByteString.Char8.unpack msg
+            case parseCommand msg of
+              Left err -> putStrLn " (invalid command)"
+              Right Quit -> do
+                putStrLn " (quit)"
+                writeBChan eventChannel QuitGame
+              -- sendClose conn (Data.ByteString.Char8.pack "Quit")
+              Right (Move dir) -> do
+                -- putStrLn $ "Client sent move command: " ++ show dir
+                writeBChan eventChannel (ClientMove i dir)
+
   forkIO $ runServer "localhost" 9160 (server eventChannel)
   mazeGen eventChannel
