@@ -27,10 +27,10 @@ import System.Random (StdGen, getStdGen)
 import Text.Read (readMaybe)
 
 maxRows :: Word32
-maxRows = 20
+maxRows = 15
 
 maxCols :: Word32
-maxCols = 40
+maxCols = 30
 
 maxPlayers :: Word32
 maxPlayers = 10
@@ -240,7 +240,7 @@ drawCell gs coord =
     (topLeft, bottomRight) = iMazeBounds maze
     tLeftBorder = if coord == topLeft then "┌" else ""
     tCenterBorder = if row == 0 then "───" else ""
-    tRigthBorder = if row == 0 then (if col == 9 then "┐" else "─") else ""
+    tRigthBorder = if row == 0 then (if col == lastCol then "┐" else "─") else ""
 
     mLeftBorder = if col == 0 then "│" else ""
     playerIcons = [" \986216 ", " \986225 ", " \986219 ", " \983545 "]
@@ -262,7 +262,7 @@ drawCell gs coord =
 
     mRightBorder = if isRightClear then "" else "│"
 
-    bLeftBorder = if col == 0 then (if row == 9 then "└" else "│") else ""
+    bLeftBorder = if col == 0 then (if row == lastRow then "└" else "│") else ""
     bCenterBorder = if isDownClear then "   " else "───"
 
     downCoord = neighborCoord DDown coord
@@ -280,16 +280,18 @@ drawCell gs coord =
       (False, False, False, False) -> b
         where
           b
-            | row == 9 && col == 9 = "┘"
-            | col == 9 = "┤"
-            | row == 9 = "┴"
+            | row == lastRow && col == lastCol = "┘"
+            | col == lastCol = "┤"
+            | row == lastRow = "┴"
             | otherwise = "┼"
       (True, False, _, True) -> "│"
       (True, False, True, False) -> "└"
-      (True, False, False, False) -> if col == 9 then "│" else "├"
+      (True, False, False, False) -> if col == lastCol then "│" else "├"
       (_, _, False, _) -> "╷"
       (_, _, _, False) -> "╶"
       _ -> " "
+
+    (lastRow, lastCol) = (coordRow bottomRight, coordCol bottomRight)
 
     isStart = coord == topLeft
     isFinish = coord == bottomRight
@@ -425,7 +427,7 @@ handleEvent event = do
       Solved -> case event of
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put $ gs & gsGameMode . gmDialog .~ NewGameDialog
-        B.AppEvent (Tick currentTime) -> B.put $ gs & gsCurrentTime .~ currentTime
+        -- B.AppEvent (Tick currentTime) -> B.put $ gs & gsCurrentTime .~ currentTime
         _ -> return ()
       NewGame -> return () -- normally impossible
     NewGameDialog -> case event of
