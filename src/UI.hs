@@ -10,7 +10,7 @@ import qualified Brick.Forms as B
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as B
 import qualified Brick.Widgets.Edit as B
-import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay, MVar, modifyMVar)
+import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay, MVar, modifyMVar, newMVar)
 import Control.Monad (forM_, forever, unless, void, (<=<))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.List (delete, elemIndex)
@@ -344,6 +344,7 @@ isSolved gs = all (^. pSolved) (gs ^. gsPlayers)
 
 gsMove :: Int -> GameState -> Direction -> GameState
 gsMove i gs dir
+  | i >= length players = gs
   | p ^. pSolved = gs
   | otherwise = case nPos of
       Just nPos -> gs''
@@ -468,7 +469,7 @@ mazeGen n eventChannel = do
   g <- getStdGen
   st <- getCurrentTime
 
-  idReseter <- forkServer eventChannel
+  reseter <- forkServer eventChannel
 
   void $
     B.customMain
@@ -476,4 +477,4 @@ mazeGen n eventChannel = do
       builder
       (Just eventChannel)
       mazeApp
-      (initGame 10 10 n g idReseter st st)
+      (initGame 10 10 n g reseter st st)

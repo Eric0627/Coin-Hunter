@@ -14,6 +14,7 @@ import Data.ByteString.Char8 (pack)
 import Data.Text (Text)
 import Graphics.Vty
 import Network.WebSockets
+import System.Process.Extra (system)
 import Prelude hiding (unlines)
 
 data Name = Message deriving (Eq, Ord, Show)
@@ -46,7 +47,6 @@ handleEvent (VtyEvent (EvKey KLeft [])) = updateCommand 'a'
 handleEvent (VtyEvent (EvKey KDown [])) = updateCommand 's'
 handleEvent (VtyEvent (EvKey KRight [])) = updateCommand 'd'
 handleEvent (VtyEvent (EvKey KEsc [])) = halt
-
 handleEvent (VtyEvent (EvKey _ [])) = updateCommand '?'
 handleEvent ev = return ()
 
@@ -65,6 +65,7 @@ client conn = defaultMain app (State conn '?')
 
 main :: IO ()
 main = do
+  system "clear"
   putStrLn "Connecting server..."
   runClient "localhost" 9160 "" client
   return ()

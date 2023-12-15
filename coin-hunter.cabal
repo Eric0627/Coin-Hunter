@@ -71,23 +71,6 @@ executable coin-hunter
     hs-source-dirs:   app
     default-language: Haskell2010
 
--- executable Server
---     main-is:          Server.hs
-
---     build-depends:
---         base,
---         coin-hunter,
---         websockets,
---         bytestring,
---         text,
---         parsec,
---         process,
---         brick
-
---     hs-source-dirs:   app
---     default-language: Haskell2010
---     ghc-options: -threaded
-
 executable Client
     main-is:          Client.hs
 
@@ -95,6 +78,7 @@ executable Client
         base,
         coin-hunter,
         text,
+        extra,
         bytestring,
         websockets,
         brick,
