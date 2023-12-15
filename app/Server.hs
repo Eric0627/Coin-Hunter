@@ -79,5 +79,5 @@ main = do
                 -- putStrLn $ "Client sent move command: " ++ show dir
                 writeBChan eventChannel (ClientMove i dir)
 
-  forkIO $ runServer "localhost" 9160 (server eventChannel)
+  forkIO $ runServer "0.0.0.0" 9160 (server eventChannel)
   mazeGen eventChannel
