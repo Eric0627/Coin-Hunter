@@ -68,4 +68,4 @@ client conn = void (defaultMain app (State conn '?'))
 main :: IO ()
 main = do
   putStrLn "Connecting server..."
-  runClient "localhost" 9160 "" client
+  runClient "192.168.1.234" 9160 "" client

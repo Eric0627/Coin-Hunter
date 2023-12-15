@@ -74,5 +74,5 @@ server eventChannel pending = do
 main :: IO ()
 main = do
   eventChannel <- newBChan 10
-  forkIO $ runServer "0.0.0.0" 9160 (server eventChannel)
+  forkIO $ runServer "localhost" 9160 (server eventChannel)
   mazeGen eventChannel

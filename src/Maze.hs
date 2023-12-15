@@ -12,7 +12,6 @@ module Maze
   , coordCol
   , Direction(..)
     -- * Maze construction algorithms
-  , recursiveBacktracking
   , binaryTree
   ) where
 

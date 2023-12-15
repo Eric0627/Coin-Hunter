@@ -36,11 +36,6 @@ data Name
   = NGFNumRows
   | NGFNumCols
   | NGFNPlayers
-  | NGFRecursiveBacktracking
-  | NGFBinaryTree
-  | NGFKruskal
-  | NGFBig
-  | NGFSmall
   deriving (Show, Eq, Ord)
 
 -- | The only additional event we use is a timer event from the outside world
@@ -66,20 +61,10 @@ data GameMode = GameMode
 
 makeLenses ''GameMode
 
-data Algorithm
-  = RecursiveBacktracking
-  | BinaryTree
-  deriving (Show, Eq, Ord)
-
-data Size = Big | Small
-  deriving (Show, Eq, Ord)
-
 data NewGameFormState = NewGameFormState
   { _ngfNumRows :: Word32,
     _ngfNumCols :: Word32,
-    _ngfNPlayers :: Word32,
-    _ngfAlgorithm :: Algorithm,
-    _ngfSize :: Size
+    _ngfNPlayers :: Word32
   }
 
 makeLenses ''NewGameFormState
@@ -92,19 +77,7 @@ newGameForm =
       B.padBottom (B.Pad 1) . label ("# rows (3-" ++ show maxRows ++ "): ")
         B.@@= B.editShowableFieldWithValidate ngfNumRows NGFNumRows validRow,
       B.padBottom (B.Pad 1) . label ("# cols (3-" ++ show maxCols ++ "): ")
-        B.@@= B.editShowableFieldWithValidate ngfNumCols NGFNumCols validCol,
-      B.padBottom (B.Pad 1) . label "algorithm: "
-        B.@@= B.radioField
-          ngfAlgorithm
-          [ (RecursiveBacktracking, NGFRecursiveBacktracking, "recursive backtracking"),
-            (BinaryTree, NGFBinaryTree, "binary tree")
-          ],
-      label "size: "
-        B.@@= B.radioField
-          ngfSize
-          [ (Big, NGFBig, "big"),
-            (Small, NGFSmall, "small")
-          ]
+        B.@@= B.editShowableFieldWithValidate ngfNumCols NGFNumCols validCol
     ]
   where
     label s w = B.vLimit 1 (B.hLimit 15 $ B.str s B.<+> B.fill ' ') B.<+> w
@@ -163,33 +136,27 @@ initGameState ::
   Word32 ->
   Word32 ->
   Word32 ->
-  Algorithm ->
-  Size ->
   StdGen ->
   UTCTime ->
   UTCTime ->
   GameState
-initGameState numRows numCols n alg size g = GameState maze players coinsPos monstersPos g3 ngf (GameMode NewGame NewGameDialog)
+initGameState numRows numCols n g = GameState maze players coinsPos monstersPos g3 ngf (GameMode NewGame NewGameDialog)
   where
-    (maze, g1) = case alg of
-      RecursiveBacktracking -> recursiveBacktracking g numRows numCols
-      BinaryTree -> binaryTree g numRows numCols
+    (maze, g1) = binaryTree g numRows numCols
     (topLeft, _) = iMazeBounds maze
     (coinsPos, g2) = sample g1 10 (iCoinCoords maze)
     (monstersPos, g3) = sample g2 5 (iCoinCoords maze)
     players = replicate (fromIntegral n) (Player topLeft 0 False)
-    ngf = newGameForm (NewGameFormState numRows numCols (fromIntegral n) alg size)
+    ngf = newGameForm (NewGameFormState numRows numCols (fromIntegral n))
 
 restartGame :: GameState -> IO GameState
 restartGame gs = do
   st <- getCurrentTime
 
-  return $ initGameState numRows numCols (fromIntegral n) alg size g st st
+  return $ initGameState numRows numCols (fromIntegral n) g st st
   where
     g = gs ^. gsGen -- (^.) get gsGen in gs
     gf = B.formState $ gs ^. gsNewGameForm
-    alg = gf ^. ngfAlgorithm
-    size = gf ^. ngfSize
     numRows = gf ^. ngfNumRows
     numCols = gf ^. ngfNumCols
     n = gf ^. ngfNPlayers
@@ -241,42 +208,9 @@ drawMaze gs =
       : fmap (B.hBox . fmap (drawCell gs)) rows
   where
     (topRow : rows) = iMazeCoords (gs ^. gsMaze)
-    drawCell = case B.formState (gs ^. gsNewGameForm) ^. ngfSize of
-      Big -> drawCellBig
-      Small -> drawCellSmall
 
-drawCellSmall ::
-  GameState ->
-  -- | the cell to draw
-  Coord ->
-  B.Widget n
-drawCellSmall gs coord =
-  B.vBox
-    [ B.str tS,
-      B.hBox [B.str lS, B.withAttr attr (B.str [dC]), B.str [rC]]
-    ]
-  where
-    (row, col) = (coordRow coord, coordCol coord)
-    players = gs ^. gsPlayers
-    playerPos0 = players ^. to head . pPos
-    maze = gs ^. gsMaze
-    (_, bottomRight) = iMazeBounds maze
-    dC = if isJust (iMazeMove maze coord DDown) then ' ' else '─'
-    rC = if isJust (iMazeMove maze coord DRight) then ' ' else '│'
-    lS = if col == 0 then "│" else ""
-    tS
-      | row /= 0 = ""
-      | col /= 0 = "─ \n"
-      | otherwise = " ─ \n"
-    isPlayerPos0 = playerPos0 == coord
-    isFinish = coord == bottomRight
-    attr
-      | isPlayerPos0 = B.attrName (if isFinish then "solved" else "pos")
-      | isFinish = B.attrName "finish"
-      | otherwise = B.attrName "blank"
-
-drawCellBig :: GameState -> Coord -> B.Widget n
-drawCellBig gs coord =
+drawCell :: GameState -> Coord -> B.Widget n
+drawCell gs coord =
   B.vBox
     [ B.hBox
         [ B.str tLeftBorder,

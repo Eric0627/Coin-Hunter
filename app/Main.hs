@@ -26,4 +26,4 @@ main = do
     initialVty
     builder
     (Just eventChannel)
-    mazeApp (initGameState 10 10 1 BinaryTree Big g st st)
+    mazeApp (initGameState 10 10 1 g st st)
