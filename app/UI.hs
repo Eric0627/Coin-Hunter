@@ -240,7 +240,7 @@ drawCell gs coord =
     tRigthBorder = if row == 0 then (if col == 9 then "┐" else "─") else ""
 
     mLeftBorder = if col == 0 then "│" else ""
-    playerIcons = [" \9898 ", " \9899 ", " \9917 ", " \9918 "]
+    playerIcons = [" \986216 ", " \986225 ", " \986219 ", " \983545 "]
     playerID = case elemIndex coord playerPos of
       Just index -> index
       Nothing -> -1

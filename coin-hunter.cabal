@@ -1,4 +1,4 @@
-cabal-version:      2.4
+cabal-version:      3.6
 name:               coin-hunter
 version:            0.1.0.0
 
@@ -80,21 +80,20 @@ executable Server
     exposed-modules:  Server
     other-modules:    UI
     build-depends:    base
-                    , async >=2.2 && <2.3
                     , bytestring
                     , websockets
                     , parsec
                     , process
-                    , coin-hunter,
-                    array,
-                    brick,
-                    containers,
-                    microlens-platform,
-                    random,
-                    text,
-                    time,
-                    vty,
-                    vty-unix
+                    , coin-hunter
+                    , array
+                    , brick
+                    , containers
+                    , microlens-platform
+                    , random
+                    , text
+                    , time
+                    , vty
+                    , vty-unix
 
     hs-source-dirs:   app
     default-language: Haskell2010

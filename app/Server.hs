@@ -32,7 +32,7 @@ mazeGen eventChannel = do
     initialVty
     builder
     (Just eventChannel)
-    mazeApp (initGameState 10 10 4 BinaryTree Big g st st)
+    mazeApp (initGameState 10 10 4 g st st)
 
 data Command = Move Maze.Core.Direction | Quit deriving (Show, Eq)
 
@@ -73,6 +73,7 @@ server eventChannel pending = do
 
 main :: IO ()
 main = do
+  -- system "clear"
   eventChannel <- newBChan 10
   forkIO $ runServer "localhost" 9160 (server eventChannel)
   mazeGen eventChannel

@@ -12,7 +12,6 @@ Nerd font symbols install [nerd fonts](https://www.nerdfonts.com/font-downloads)
 ```
 │󰱨 │
 │󰱱 │
-│󰱰 │
 │󰱫 │
 │󰱮 │
 │󰇹 │
