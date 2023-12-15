@@ -1,14 +1,10 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
 module Main where
 
 import Brick.AttrMap
-import Brick.Focus
 import Brick.Main
 import Brick.Types
 import Brick.Widgets.Center
 import Brick.Widgets.Core
-import Brick.Widgets.Edit
 import Control.Monad (forever, void, when)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString (ByteString)
@@ -16,7 +12,7 @@ import Data.ByteString.Char8 (pack)
 import Data.Text (Text)
 import Graphics.Vty
 import Network.WebSockets
-import Prelude hiding (unlines)
+import System.Process.Extra (system)
 
 data Name = Message deriving (Eq, Ord, Show)
 
@@ -48,7 +44,6 @@ handleEvent (VtyEvent (EvKey KLeft [])) = updateCommand 'a'
 handleEvent (VtyEvent (EvKey KDown [])) = updateCommand 's'
 handleEvent (VtyEvent (EvKey KRight [])) = updateCommand 'd'
 handleEvent (VtyEvent (EvKey KEsc [])) = halt
-
 handleEvent (VtyEvent (EvKey _ [])) = updateCommand '?'
 handleEvent ev = return ()
 
@@ -67,5 +62,7 @@ client conn = defaultMain app (State conn '?')
 
 main :: IO ()
 main = do
+  system "clear"
   putStrLn "Connecting server..."
-  void $ runClient "0.0.0.0" 9160 "" client
+  runClient "192.168.1.85" 9160 "" client
+  return ()

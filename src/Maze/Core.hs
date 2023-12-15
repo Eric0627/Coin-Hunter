@@ -246,7 +246,7 @@ iMazeCoords maze = rows
 --
 sample :: (RandomGen g) => g -> Int -> [a] -> ([a], g)
 sample gen 0 _ = ([], gen)
-sample gen k xs 
+sample gen k xs
   | length xs == 0 = ([], gen)
   | otherwise = let k' = min k (length xs)
                     (index, g') = randomR (0, length xs - 1) gen

@@ -5,30 +5,32 @@
 module UI where
 
 import qualified Brick as B
+import qualified Brick.BChan as B
 import qualified Brick.Forms as B
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as B
 import qualified Brick.Widgets.Edit as B
-import Control.Monad (unless, (<=<))
+import Control.Concurrent (MVar, ThreadId, forkIO, killThread, modifyMVar, newMVar, threadDelay)
+import Control.Monad (forM_, forever, unless, void, (<=<))
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Functor.Identity (Identity)
 import Data.List (delete, elemIndex)
 import Data.Maybe (isJust)
 import qualified Data.Text as T
 import Data.Time.Clock
 import Data.Word (Word32)
 import qualified Graphics.Vty as V
+import qualified Graphics.Vty.Platform.Unix as V
 import Lens.Micro.Platform
 import Maze
-import System.Random (StdGen)
+import Server (forkServer)
+import System.Random (StdGen, getStdGen)
 import Text.Read (readMaybe)
-import Data.Array (Ix(index))
 
 maxRows :: Word32
-maxRows = 20
+maxRows = 15
 
 maxCols :: Word32
-maxCols = 40
+maxCols = 30
 
 maxPlayers :: Word32
 maxPlayers = 10
@@ -44,8 +46,6 @@ data Name
 -- matter how often these ticks are received, as long as they are requently
 -- enough that we can know how many seconds has passed (so something like every
 -- tenth of a second should be sufficient).
-data MazeEvent = Tick UTCTime | ClientMove Int Direction | MonsterTick | QuitGame
-
 data Dialog
   = NoDialog
   | NewGameDialog
@@ -53,7 +53,7 @@ data Dialog
 data SolvingState
   = InProgress
   | Solved
-  | NewGame 
+  | NewGame
   deriving (Eq)
 
 data GameMode = GameMode
@@ -126,6 +126,7 @@ data GameState = GameState
     _gsNewGameForm :: B.Form NewGameFormState MazeEvent Name,
     _gsGameMode :: GameMode,
     -- | Time when the current game was started
+    _gsIDReseter :: IO (),
     _gsStartTime :: UTCTime,
     -- | Time right now
     _gsCurrentTime :: UTCTime
@@ -133,15 +134,16 @@ data GameState = GameState
 
 makeLenses ''GameState
 
-initGameState ::
+initGame ::
   Word32 ->
   Word32 ->
   Word32 ->
   StdGen ->
+  IO () ->
   UTCTime ->
   UTCTime ->
   GameState
-initGameState numRows numCols n g = GameState maze players coinsPos monstersPos g3 ngf (GameMode NewGame NewGameDialog)
+initGame numRows numCols n g = GameState maze players coinsPos monstersPos g3 ngf (GameMode NewGame NewGameDialog)
   where
     (maze, g1) = binaryTree g numRows numCols
     (topLeft, _) = iMazeBounds maze
@@ -152,14 +154,16 @@ initGameState numRows numCols n g = GameState maze players coinsPos monstersPos 
 
 restartGame :: GameState -> IO GameState
 restartGame gs = do
-  st <- getCurrentTime
+  idReseter
+  ct <- getCurrentTime
 
-  return $ initGameState numRows numCols (fromIntegral n) g st st
+  return $ initGame numRows numCols (fromIntegral n) g idReseter ct ct
   where
     g = gs ^. gsGen -- (^.) get gsGen in gs
     gf = B.formState $ gs ^. gsNewGameForm
     numRows = gf ^. ngfNumRows
     numCols = gf ^. ngfNumCols
+    idReseter = gs ^. gsIDReseter
     n = gf ^. ngfNPlayers
 
 mazeApp :: B.App GameState MazeEvent Name
@@ -193,7 +197,7 @@ drawMain gs =
     [ B.vLimit 3 $ B.center $ B.str "Coin Hunter",
       B.vBox
         [ B.hCenter $ drawMaze gs,
-          B.hCenter $ status gs (secondsElapsed gs)
+          B.hCenter $ status gs
         ],
       B.vLimit 5 $ B.center help
     ]
@@ -227,14 +231,14 @@ drawCell gs coord =
     ]
   where
     (row, col) = (coordRow coord, coordCol coord)
-    playerPos = map (\i -> gs ^. gsPlayers . to (!! i) ^. pPos) [0..length (gs ^. gsPlayers)-1]
+    playerPos = map (\i -> gs ^. gsPlayers . to (!! i) . pPos) [0 .. length (gs ^. gsPlayers) - 1]
     coinsPos = gs ^. gsCoinsPos
     monstersPos = gs ^. gsMonstersPos
     maze = gs ^. gsMaze
     (topLeft, bottomRight) = iMazeBounds maze
     tLeftBorder = if coord == topLeft then "┌" else ""
     tCenterBorder = if row == 0 then "───" else ""
-    tRigthBorder = if row == 0 then (if col == 9 then "┐" else "─") else ""
+    tRigthBorder = if row == 0 then (if col == lastCol then "┐" else "─") else ""
 
     mLeftBorder = if col == 0 then "│" else ""
     playerIcons = [" \986216 ", " \986225 ", " \986219 ", " \983545 "]
@@ -244,10 +248,10 @@ drawCell gs coord =
     m
       | isFinish = " ⚐ "
       | isMonster = " \986057 " -- 👾
-      -- | isMonster = " \983712 " -- 👻
-      -- | isMonster = " ⚉ "
+      -- \| isMonster = " \983712 " -- 👻
+      -- \| isMonster = " ⚉ "
       | playerID /= -1 = playerIcons !! playerID -- 😀
-      -- | isPlayerPos = " ⛑ "
+      -- \| isPlayerPos = " ⛑ "
       | isCoin = " ◉ "
       | otherwise = "   "
 
@@ -256,7 +260,7 @@ drawCell gs coord =
 
     mRightBorder = if isRightClear then "" else "│"
 
-    bLeftBorder = if col == 0 then (if row == 9 then "└" else "│") else ""
+    bLeftBorder = if col == 0 then (if row == lastRow then "└" else "│") else ""
     bCenterBorder = if isDownClear then "   " else "───"
 
     downCoord = neighborCoord DDown coord
@@ -274,16 +278,18 @@ drawCell gs coord =
       (False, False, False, False) -> b
         where
           b
-            | row == 9 && col == 9 = "┘"
-            | col == 9 = "┤"
-            | row == 9 = "┴"
+            | row == lastRow && col == lastCol = "┘"
+            | col == lastCol = "┤"
+            | row == lastRow = "┴"
             | otherwise = "┼"
       (True, False, _, True) -> "│"
       (True, False, True, False) -> "└"
-      (True, False, False, False) -> if col == 9 then "│" else "├"
+      (True, False, False, False) -> if col == lastCol then "│" else "├"
       (_, _, False, _) -> "╷"
       (_, _, _, False) -> "╶"
       _ -> " "
+
+    (lastRow, lastCol) = (coordRow bottomRight, coordCol bottomRight)
 
     isStart = coord == topLeft
     isFinish = coord == bottomRight
@@ -301,13 +307,13 @@ secondsElapsed gs =
     nominalDiffTimeToSeconds $
       diffUTCTime (gs ^. gsCurrentTime) (gs ^. gsStartTime)
 
-status :: GameState -> Int -> B.Widget n
-status gs time
- | InProgress == gs ^. gsGameMode . gmSolvingState = 
-  B.str $ "Time: " ++ show time ++ "s" ++ (foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Coins: " ++ show ( gs ^. gsPlayers . to (!! i) ^. pCoins)) [0..length (gs ^. gsPlayers)-1]))
- | Solved == gs ^. gsGameMode . gmSolvingState = 
-  B.str $ "Solved in " ++ show time ++ "s." ++ (foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Score: " ++ show ( gs ^. gsPlayers . to (!! i) ^. pScore)) [0..length (gs ^. gsPlayers)-1]))
- | otherwise = B.str "" 
+status :: GameState -> B.Widget n
+status gs
+  | InProgress == gs ^. gsGameMode . gmSolvingState =
+      B.str $ "Time: " ++ show (secondsElapsed gs) ++ "s" ++ foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Coins: " ++ show (gs ^. gsPlayers . to (!! i) . pCoins)) [0 .. length (gs ^. gsPlayers) - 1])
+  | Solved == gs ^. gsGameMode . gmSolvingState =
+      B.str $ "Solved in " ++ show (secondsElapsed gs) ++ "s." ++ foldr1 (++) (map (\i -> "\nPlayer " ++ show i ++ " Score: " ++ show (gs ^. gsPlayers . to (!! i) . pScore)) [0 .. length (gs ^. gsPlayers) - 1])
+  | otherwise = B.str ""
 
 getScore :: Int -> Int -> Int
 getScore t c
@@ -338,21 +344,23 @@ isSolved gs = all (^. pSolved) (gs ^. gsPlayers)
 
 gsMove :: Int -> GameState -> Direction -> GameState
 gsMove i gs dir
+  | i >= length players = gs
   | p ^. pSolved = gs
   | otherwise = case nPos of
-    Just nPos -> gs''
-      where
-        goal = snd (iMazeBounds $ gs ^. gsMaze)
-        score = if (p ^. pScore == 0 && nPos == goal) 
-                  then (getScore (secondsElapsed gs) (p ^. pCoins) + p ^. pCoins)
-                  else 0
-        gs' = gsGetCoin i (gs & gsPlayers . ix i .~ p {_pPos = nPos, _pSolved = nPos == goal, _pScore = score})
-        coins = p ^. pCoins
-        gs''
-          | isSolved gs' = gs' & gsGameMode . gmSolvingState .~ Solved
-          | nPos `elem` gs ^. gsMonstersPos = gs & gsPlayers . ix i . pPos .~ fst (iMazeBounds (gs ^. gsMaze))
-          | otherwise = gs'
-    Nothing -> gs
+      Just nPos -> gs''
+        where
+          goal = snd (iMazeBounds $ gs ^. gsMaze)
+          score =
+            if p ^. pScore == 0 && nPos == goal
+              then getScore (secondsElapsed gs) (p ^. pCoins) + p ^. pCoins
+              else 0
+          gs' = gsGetCoin i (gs & gsPlayers . ix i .~ p {_pPos = nPos, _pSolved = nPos == goal, _pScore = score})
+          coins = p ^. pCoins
+          gs''
+            | isSolved gs' = gs' & gsGameMode . gmSolvingState .~ Solved
+            | nPos `elem` gs ^. gsMonstersPos = gs & gsPlayers . ix i . pPos .~ fst (iMazeBounds (gs ^. gsMaze))
+            | otherwise = gs'
+      Nothing -> gs
   where
     players = gs ^. gsPlayers
     p = players ^. to (!! i)
@@ -417,7 +425,7 @@ handleEvent event = do
       Solved -> case event of
         B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt
         B.VtyEvent (V.EvKey (V.KChar 'n') []) -> B.put $ gs & gsGameMode . gmDialog .~ NewGameDialog
-        B.AppEvent (Tick currentTime) -> B.put $ gs & gsCurrentTime .~ currentTime
+        -- B.AppEvent (Tick currentTime) -> B.put $ gs & gsCurrentTime .~ currentTime
         _ -> return ()
       NewGame -> return () -- normally impossible
     NewGameDialog -> case event of
@@ -444,3 +452,30 @@ attrMap _ =
       (B.focusedFormInputAttr, V.black `B.on` V.yellow),
       (B.invalidFormInputAttr, V.white `B.on` V.red)
     ]
+
+mazeGen :: IO ()
+mazeGen = do
+  eventChannel <- B.newBChan 10
+  forkIO $
+    forever $
+      getCurrentTime
+        >>= B.writeBChan eventChannel . Tick
+        >> threadDelay 100000 -- tick every 0.1 seconds
+  forkIO $
+    forever $
+      B.writeBChan eventChannel MonsterTick
+        >> threadDelay 1000000 -- move monster every second
+  g <- getStdGen
+  st <- getCurrentTime
+
+  reseter <- forkServer eventChannel
+
+  let builder = V.mkVty V.defaultConfig
+  initialVty <- builder
+  void $
+    B.customMain
+      initialVty
+      builder
+      (Just eventChannel)
+      mazeApp
+      (initGame 10 10 1 g reseter st st)
