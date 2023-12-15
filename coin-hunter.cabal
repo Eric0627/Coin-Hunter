@@ -1,6 +1,6 @@
-cabal-version:      3.6
+cabal-version:      3.8
 name:               coin-hunter
-version:            0.1.0.0
+version:            1.0.0.0
 
 -- A short (one-line) description of the package.
 -- synopsis:
@@ -19,95 +19,87 @@ version:            0.1.0.0
 extra-source-files: CHANGELOG.md
 
 library
-    exposed-modules:  Maze
-                      Maze.Algorithms
-                      Maze.Algorithms.BinaryTree
-                      Maze.Core
-                      Maze.Utils
+    exposed-modules:
+        Maze
+        Maze.Algorithms
+        Maze.Algorithms.BinaryTree
+        Maze.Core
+        Maze.Utils
+        UI
+        Server
 
-    -- Modules included in this library but not exported.
-    -- other-modules:    Maze.Algorithms.BinaryTree
-    --                   Maze.Algorithms.Kruskal
-    --                   Maze.Algorithms.RecursiveBacktracking
+    build-depends:
+        -- general
+        base,
+        extra,
+        array,
+        containers,
 
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
-    build-depends:    base,
-                      array,
-                      brick,
-                      microlens-platform,
-                      text,
-                      combinat,
-                      containers,
-                      extra,
-                      pqueue,
-                      random,
-                      time,
-                      union-find,
-                      vty,
-                      QuickCheck
+        -- server
+        text,
+        bytestring,
+        parsec,
+        websockets,
+
+        -- utils
+        time,
+        text,
+        random,
+        combinat,
+        microlens-platform,
+
+        -- ui
+        brick,
+        vty,
+        vty-unix,
+
+        -- testing
+        QuickCheck
     hs-source-dirs:   src
     default-language: Haskell2010
 
 executable coin-hunter
     main-is:          Main.hs
 
-    -- Modules included in this executable, other than Main.
-    other-modules:    UI
-
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
     build-depends:
         base,
-        array,
-        brick,
-        containers,
         coin-hunter,
-        microlens-platform,
-        random,
-        text,
-        time,
-        vty,
-        vty-unix
+        brick
 
     ghc-options: -threaded
 
     hs-source-dirs:   app
     default-language: Haskell2010
 
-executable Server
-    main-is:          Server.hs
-    exposed-modules:  Server
-    other-modules:    UI
-    build-depends:    base
-                    , bytestring
-                    , websockets
-                    , parsec
-                    , process
-                    , coin-hunter
-                    , array
-                    , brick
-                    , microlens-platform
-                    , random
-                    , text
-                    , time
-                    , vty
-                    , vty-unix
+-- executable Server
+--     main-is:          Server.hs
 
-    hs-source-dirs:   app
-    default-language: Haskell2010
-    ghc-options: -threaded
+--     build-depends:
+--         base,
+--         coin-hunter,
+--         websockets,
+--         bytestring,
+--         text,
+--         parsec,
+--         process,
+--         brick
+
+--     hs-source-dirs:   app
+--     default-language: Haskell2010
+--     ghc-options: -threaded
 
 executable Client
     main-is:          Client.hs
 
-    build-depends:    base
-                    , vty
-                    , text
-                    , brick
-                    , bytestring
-                    , websockets
-                    , coin-hunter
+    build-depends:
+        base,
+        coin-hunter,
+        text,
+        bytestring,
+        websockets,
+        brick,
+        vty
+
     hs-source-dirs:   app
     default-language: Haskell2010
     ghc-options: -threaded

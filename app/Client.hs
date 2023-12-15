@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
 module Main where
 
 import Brick.AttrMap
@@ -68,4 +66,5 @@ client conn = defaultMain app (State conn '?')
 main :: IO ()
 main = do
   putStrLn "Connecting server..."
-  void $ runClient "192.168.1.85" 9160 "" client
+  runClient "localhost" 9160 "" client
+  return ()

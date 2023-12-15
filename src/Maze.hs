@@ -1,19 +1,25 @@
 module Maze
   ( -- * Maze type
-    IMaze
-  , iMazeBounds
-  , iMazeMove
-  , iMazeCoords
-  , sample
-  , iCoinCoords
-  , neighborCoord
-  , Coord
-  , coordRow
-  , coordCol
-  , Direction(..)
-    -- * Maze construction algorithms
-  , binaryTree
-  ) where
+    IMaze,
+    iMazeBounds,
+    iMazeMove,
+    iMazeCoords,
+    sample,
+    iCoinCoords,
+    neighborCoord,
+    Coord,
+    coordRow,
+    coordCol,
+    Direction (..),
+    MazeEvent (..),
 
-import Maze.Core
+    -- * Maze construction algorithms
+    binaryTree,
+  )
+where
+
+import Data.Time.Clock (UTCTime)
 import Maze.Algorithms
+import Maze.Core
+
+data MazeEvent = QuitGame | ClientMove Int Direction | Tick UTCTime | MonsterTick
